@@ -1,0 +1,264 @@
+/**
+ * Open-Meteo client — https://open-meteo.com
+ *
+ * Chosen after comparing Open-Meteo / OpenAQ / WAQI / IQAir: it is the only option
+ * that needs no API key or registration. Verified live before use:
+ *   current air quality  -> pm2_5, pm10, us_aqi, co, no2, so2, o3   (200)
+ *   hourly history       -> past_days<=92, hourly us_aqi/pm2_5      (200)
+ *   weather              -> temperature_2m, relative_humidity_2m, wind_speed_10m (200)
+ *
+ * Limits: non-commercial, 10k calls/day. Requires attribution:
+ * "Air quality and weather data by Open-Meteo".
+ */
+
+export type Coordinates = {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+};
+
+/** Jakarta Pusat, the location mocked throughout the Figma file. */
+export const JAKARTA_PUSAT: Coordinates = {
+  latitude: -6.1754,
+  longitude: 106.8272,
+  timezone: 'Asia/Jakarta',
+};
+
+export type PollutantReading = {
+  key: string;
+  label: string;
+  value: number;
+  unit: string;
+};
+
+export type CurrentReading = {
+  /** API time already localised to Asia/Jakarta */
+  observedAt: string;
+  aqi: number;
+  pm25: number;
+  pm10: number;
+  temperature: number;
+  humidity: number;
+  wind: number;
+  pollutants: PollutantReading[];
+};
+
+export type DayAqi = {
+  day: string;
+  /** Daily mean */
+  avg: number;
+  /** Daily max */
+  max: number;
+  /** Daily min */
+  min: number;
+};
+
+const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
+const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
+
+/** The four locations shown in Figma's map markers and popular-location cards. */
+export const POPULAR_LOCATIONS: { name: string; location: Coordinates }[] = [
+  { name: 'Monas', location: { latitude: -6.179, longitude: 106.8271, timezone: 'Asia/Jakarta' } },
+  {
+    name: 'Sudirman',
+    location: { latitude: -6.2088, longitude: 106.818, timezone: 'Asia/Jakarta' },
+  },
+  {
+    name: 'Menteng',
+    location: { latitude: -6.195, longitude: 106.838, timezone: 'Asia/Jakarta' },
+  },
+  {
+    name: 'Kota Tua',
+    location: { latitude: -6.135, longitude: 106.813, timezone: 'Asia/Jakarta' },
+  },
+];
+
+type ApiResponse = {
+  current?: Record<string, string | number | null>;
+  hourly?: { time?: (string | null)[]; us_aqi?: (number | null)[]; pm2_5?: (number | null)[] };
+  current_units?: Record<string, string>;
+};
+
+function numberOr(value: number | string | null | undefined, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Small TTL cache. Every screen mount used to fire six requests (current reading,
+ * weather, four popular locations); opening a few tabs was enough to hit
+ * Open-Meteo's rate limit with HTTP 429 during development.
+ */
+type CacheEntry = { at: number; value: unknown };
+const cache = new Map<string, CacheEntry>();
+
+async function withCache<T>(key: string, ttlMs: number, run: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  const now = Date.now();
+  if (hit && now - hit.at < ttlMs) return hit.value as T;
+  const value = await run();
+  cache.set(key, { at: now, value });
+  return value;
+}
+
+/** Exposed for tests / manual refresh. */
+export function clearRequestCache() {
+  cache.clear();
+}
+
+async function requestJson(url: string): Promise<ApiResponse> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Open-Meteo ${response.status} ${response.statusText}`);
+  }
+  return (await response.json()) as ApiResponse;
+}
+
+export async function fetchCurrentReading(
+  location: Coordinates = JAKARTA_PUSAT,
+): Promise<CurrentReading> {
+  return withCache(
+    `current:${location.latitude},${location.longitude}`,
+    5 * 60_000,
+    () => loadCurrentReading(location),
+  );
+}
+
+async function loadCurrentReading(location: Coordinates): Promise<CurrentReading> {
+  const common = {
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    timezone: location.timezone,
+  };
+
+  const airQuery = new URLSearchParams({
+    ...common,
+    current: 'us_aqi,pm2_5,pm10,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone',
+  });
+  const weatherQuery = new URLSearchParams({
+    ...common,
+    current: 'temperature_2m,relative_humidity_2m,wind_speed_10m',
+  });
+
+  const [air, weather] = await Promise.all([
+    requestJson(`${AIR_QUALITY_URL}?${airQuery.toString()}`),
+    requestJson(`${FORECAST_URL}?${weatherQuery.toString()}`),
+  ]);
+
+  const aqi = air.current ?? {};
+  const wx = weather.current ?? {};
+
+  const pollutants: PollutantReading[] = [
+    { key: 'pm2_5', label: 'PM2.5', value: numberOr(aqi.pm2_5), unit: 'μg/m³' },
+    { key: 'pm10', label: 'PM10', value: numberOr(aqi.pm10), unit: 'μg/m³' },
+    {
+      key: 'no2',
+      label: 'NO₂',
+      value: numberOr(aqi.nitrogen_dioxide),
+      unit: 'μg/m³',
+    },
+    { key: 'o3', label: 'O₃', value: numberOr(aqi.ozone), unit: 'μg/m³' },
+  ];
+
+  return {
+    observedAt: typeof aqi.time === 'string' ? aqi.time : '',
+    aqi: numberOr(aqi.us_aqi),
+    pm25: numberOr(aqi.pm2_5),
+    pm10: numberOr(aqi.pm10),
+    temperature: numberOr(wx.temperature_2m),
+    humidity: numberOr(wx.relative_humidity_2m),
+    wind: numberOr(wx.wind_speed_10m),
+    pollutants,
+  };
+}
+
+/** URL-safe slug for a popular location name: "Kota Tua" -> "kota-tua". */
+export function locationSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+export function findPopularLocation(slug: string) {
+  return POPULAR_LOCATIONS.find((entry) => locationSlug(entry.name) === slug) ?? null;
+}
+
+/** Light-weight single-location AQI read (no weather call). */
+export async function fetchAqiAt(location: Coordinates): Promise<number> {
+  return withCache(
+    `aqi:${location.latitude},${location.longitude}`,
+    5 * 60_000,
+    () => loadAqiAt(location),
+  );
+}
+
+async function loadAqiAt(location: Coordinates): Promise<number> {
+  const query = new URLSearchParams({
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    timezone: location.timezone,
+    current: 'us_aqi',
+  });
+  const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
+  return numberOr(response.current?.us_aqi);
+}
+
+
+/** Groups raw hourly series into daily mean/max/min. Exported for testing. */
+export function groupHourlyByDay(
+  times: (string | null)[],
+  values: (number | null)[],
+): DayAqi[] {
+  const buckets = new Map<string, number[]>();
+  for (let i = 0; i < times.length; i += 1) {
+    const time = times[i];
+    const value = values[i];
+    if (!time || typeof value !== 'number' || !Number.isFinite(value)) continue;
+    const day = time.slice(0, 10);
+    const list = buckets.get(day);
+    if (list) list.push(value);
+    else buckets.set(day, [value]);
+  }
+
+  const days: DayAqi[] = [];
+  for (const [day, samples] of buckets) {
+    const sum = samples.reduce((total, sample) => total + sample, 0);
+    days.push({
+      day,
+      avg: Math.round((sum / samples.length) * 10) / 10,
+      max: Math.round(Math.max(...samples)),
+      min: Math.round(Math.min(...samples)),
+    });
+  }
+  days.sort((a, b) => a.day.localeCompare(b.day));
+  return days;
+}
+
+export async function fetchDailyAqi(
+  pastDays: number,
+  location: Coordinates = JAKARTA_PUSAT,
+): Promise<DayAqi[]> {
+  return withCache(
+    `daily:${location.latitude},${location.longitude}:${pastDays}`,
+    15 * 60_000,
+    () => loadDailyAqi(pastDays, location),
+  );
+}
+
+async function loadDailyAqi(pastDays: number, location: Coordinates): Promise<DayAqi[]> {
+  const query = new URLSearchParams({
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    timezone: location.timezone,
+    hourly: 'us_aqi',
+    past_days: String(pastDays),
+    forecast_days: '1',
+  });
+  const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
+  const hourly = response.hourly ?? {};
+  return groupHourlyByDay(hourly.time ?? [], hourly.us_aqi ?? []);
+}
+
+/** Attribution required by the Open-Meteo licence. */
+export const ATTRIBUTION = 'Data kualitas udara & cuaca oleh Open-Meteo';

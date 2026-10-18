@@ -20,6 +20,7 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+*.log
 
 # debug
 npm-debug.*
@@ -39,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# large local artifacts (the Expo Go APK is 216 MB; GitHub rejects >100 MB)
+Expo-Go-*.apk
+*.apk
