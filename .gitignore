@@ -44,3 +44,4 @@ yarn-error.*
 # large local artifacts (the Expo Go APK is 216 MB; GitHub rejects >100 MB)
 Expo-Go-*.apk
 *.apk
+__pycache__/
