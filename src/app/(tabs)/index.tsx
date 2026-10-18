@@ -1,79 +1,60 @@
-import { useState, type ReactNode } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import {
-  Bell,
-  ChevronDown,
-  Droplets,
-  Lightbulb,
-  MapPin,
-  Sparkles,
-  Sun,
-  Wind,
-} from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, MapPin, Wind } from 'lucide-react-native';
 
-import { locationSlug } from '@/api/openMeteo';
+import { locationSlug, type PollutantReading } from '@/api/openMeteo';
 import { AqiRing } from '@/components/AqiRing';
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { LocationSheet } from '@/components/LocationSheet';
 import { FadeIn } from '@/components/motion';
-import {
-  AqiLegend,
-  Card,
-  CategoryPill,
-  HeroGlow,
-  InlineError,
-  SectionTitle,
-  Skeleton,
-} from '@/components/ui';
-import { usePopularLocations, useSelectedAir } from '@/hooks/useAirQuality';
+import { Card, HeroGlow, InlineError, SectionTitle, Skeleton } from '@/components/ui';
+import { usePopularLocations, useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor, formatWib, gaugeProgress, readableOn } from '@/lib/aqi';
-import { formatTemperature } from '@/lib/format';
+import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
+import { placeImage } from '@/lib/placeImages';
 import { useAppState } from '@/state/app';
 import { useNotifications } from '@/state/notifications';
 import { color, font, radius, spacing, type as typo } from '@/theme/tokens';
 
-function WeatherStat({
-  icon,
-  label,
-}: {
-  icon: ReactNode;
-  label: string;
-}) {
+function PollutantValue({ pollutant }: { pollutant: PollutantReading | undefined }) {
   return (
-    <View style={styles.weatherStat}>
-      {icon}
-      <Text style={styles.weatherLabel}>{label}</Text>
+    <View style={styles.pmItem}>
+      <Text style={styles.pmLabel}>{pollutant?.label ?? '—'}</Text>
+      <Text style={styles.pmValue}>
+        {pollutant ? `${pollutant.value} ${pollutant.unit}` : '—'}
+      </Text>
     </View>
   );
 }
 
 function PopularCard({ name, aqi, loading }: { name: string; aqi: number; loading: boolean }) {
   const category = categoryFor(aqi);
+  const image = placeImage(locationSlug(name));
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Detail ${name}`}
-      style={({ pressed }) => [styles.popular, pressed && styles.popularPressed]}
+      accessibilityLabel={`Detail ${name}, AQI ${aqi}`}
+      style={({ pressed }) => [styles.popular, pressed && styles.pressed]}
       onPress={() =>
         router.push({ pathname: '/lokasi/[slug]', params: { slug: locationSlug(name) } })
       }
     >
-      <LinearGradient colors={[color.sky, color.tint]} style={styles.popularTile}>
-        <MapPin size={20} color={color.accent} strokeWidth={1.8} />
-      </LinearGradient>
+      {image ? (
+        <Image source={image} style={styles.popularPhoto} />
+      ) : (
+        <LinearGradient colors={[color.sky, color.tint]} style={styles.popularPhoto} />
+      )}
       <Text style={styles.popularName} numberOfLines={1}>
         {name}
       </Text>
       {loading ? (
-        <Skeleton width={34} height={12} />
+        <Skeleton width={44} height={12} />
       ) : (
-        <View style={styles.popularAqi}>
-          <View style={[styles.dot, { backgroundColor: category.color }]} />
-          <Text style={styles.popularValue}>{aqi}</Text>
-        </View>
+        <Text style={[styles.popularValue, { color: category.color }]}>
+          {aqi} AQI
+        </Text>
       )}
     </Pressable>
   );
@@ -83,7 +64,8 @@ export default function BerandaScreen() {
   const topInset = useTopInset();
   const air = useSelectedAir();
   const popular = usePopularLocations();
-  const { selected, settings } = useAppState();
+  const history = useSelectedHistory(2);
+  const { selected } = useAppState();
   const notifications = useNotifications();
   const [pickerOpen, setPickerOpen] = useState(false);
   const unread = notifications.filter((entry) => !entry.read).length;
@@ -91,12 +73,19 @@ export default function BerandaScreen() {
   const reading = air.data;
   const aqi = reading?.aqi ?? 0;
   const category = categoryFor(aqi);
+  const flavor = aqi <= 100 ? 'cukup baik' : 'kurang baik';
 
-  const headline = reading
-    ? category.message
-    : air.loading
-      ? 'Memuat data udara…'
-      : 'Data udara belum tersedia';
+  const pm25 = reading?.pollutants.find((entry) => entry.key === 'pm2_5');
+  const pm10 = reading?.pollutants.find((entry) => entry.key === 'pm10');
+
+  // "lebih baik dibanding kemarin" — honest: needs two daily averages.
+  const days = history.data ?? [];
+  const comparison =
+    days.length >= 2
+      ? days[days.length - 1].avg <= days[days.length - 2].avg
+        ? 'lebih baik dibanding kemarin.'
+        : 'lebih buruk dibanding kemarin.'
+      : 'akan tersedia setelah cukup data terkumpul.';
 
   return (
     <ScrollView
@@ -111,31 +100,45 @@ export default function BerandaScreen() {
       </View>
 
       <View style={styles.header}>
+        <View style={styles.brand}>
+          <Image
+            source={require('../../../assets/logo-mark.png')}
+            style={styles.brandGlyph}
+            resizeMode="contain"
+          />
+          <Text style={styles.brandWord}>awanin</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'}
+          hitSlop={12}
+          onPress={() => router.push('/notifikasi')}
+          style={({ pressed }) => [pressed && styles.pressed]}
+        >
+          <Bell size={22} color={color.accent} strokeWidth={1.8} />
+          {unread > 0 ? <View style={styles.bellDot} /> : null}
+        </Pressable>
+      </View>
+
+      <View style={styles.locationRow}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Ganti lokasi, sekarang ${selected.name}`}
           onPress={() => setPickerOpen(true)}
           style={({ pressed }) => [styles.location, pressed && styles.pressed]}
         >
-          <MapPin size={19} color={color.accent} strokeWidth={1.8} />
-          <View style={styles.locationText}>
-            <Text style={styles.locationEyebrow}>Lokasi Anda</Text>
-            <Text style={styles.locationValue}>{selected.name}</Text>
-          </View>
-          <ChevronDown size={16} color={color.accent} strokeWidth={1.8} />
+          <MapPin size={15} color={color.accent} strokeWidth={2} />
+          <Text style={styles.locationText}>{selected.name}</Text>
+          <ChevronDown size={14} color={color.accent} strokeWidth={2} />
         </Pressable>
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'}
-            hitSlop={12}
-            onPress={() => router.push('/notifikasi')}
-            style={({ pressed }) => [pressed && styles.pressed]}
-          >
-            <Bell size={22} color={color.accent} strokeWidth={1.8} />
-            {unread > 0 ? <View style={styles.bellDot} /> : null}
-          </Pressable>
-        </View>
+      </View>
+
+      <View style={styles.intro}>
+        <Text style={styles.introTitle}>Kualitas udara hari ini</Text>
+        <Text style={styles.introBody}>
+          Udara di sekitar kamu saat ini {reading ? flavor : 'sedang diperiksa'}. Tetap jaga
+          kesehatan ya!
+        </Text>
       </View>
 
       <LinearGradient colors={[color.heroSky, '#eef6ff']} style={styles.hero}>
@@ -145,41 +148,25 @@ export default function BerandaScreen() {
           value={reading ? aqi : '—'}
           progress={gaugeProgress(aqi)}
           categoryColor={reading ? category.color : color.track}
+          badge={{
+            label: reading ? category.short : 'Memuat',
+            tone: reading ? category.color : color.track,
+            textTone: readableOn(reading ? category.color : color.track),
+          }}
         />
 
-        <CategoryPill
-          label={reading ? category.label : 'Memuat'}
-          tone={reading ? category.color : color.track}
-          textTone={readableOn(reading ? category.color : color.track)}
-          style={styles.categoryPill}
-        />
-
-        <Text style={styles.headline}>{headline}</Text>
-        <Text style={styles.updated}>
-          {reading ? `Diperbarui pukul ${formatWib(reading.observedAt)}` : 'Menghubungkan ke Open-Meteo'}
-        </Text>
-
-        <View style={styles.weather}>
+        <View style={styles.pmRow}>
           {reading ? (
             <>
-              <WeatherStat
-                icon={<Sun size={17} color={color.accent} strokeWidth={1.8} />}
-                label={formatTemperature(reading.temperature, settings.temperatureUnit)}
-              />
-              <WeatherStat
-                icon={<Droplets size={16} color={color.accent} strokeWidth={1.8} />}
-                label={`${reading.humidity}%`}
-              />
-              <WeatherStat
-                icon={<Wind size={17} color={color.accent} strokeWidth={1.8} />}
-                label={`${reading.wind} km/j`}
-              />
+              <PollutantValue pollutant={pm25} />
+              <View style={styles.pmDivider} />
+              <PollutantValue pollutant={pm10} />
             </>
           ) : (
             <>
-              <Skeleton width={54} height={13} />
-              <Skeleton width={42} height={13} />
-              <Skeleton width={68} height={13} />
+              <Skeleton width={86} height={13} />
+              <View style={styles.pmDivider} />
+              <Skeleton width={86} height={13} />
             </>
           )}
         </View>
@@ -191,32 +178,26 @@ export default function BerandaScreen() {
         ) : null}
 
         <FadeIn delay={60}>
-          <AqiLegend value={reading ? aqi : undefined} />
-        </FadeIn>
-
-        <FadeIn delay={120}>
-          <Card tone="tint" style={styles.tipCard}>
-            <View style={styles.tipRow}>
-              <Sparkles size={24} color={color.accent} strokeWidth={1.8} />
-              <View style={styles.tipText}>
-                <Text style={styles.tipTitle}>
-                  {!reading
-                    ? 'Menunggu pembacaan udara'
-                    : aqi <= 100
-                      ? 'Aktivitas luar ruang aman hari ini'
-                      : 'Batasi aktivitas luar ruang hari ini'}
-                </Text>
-                <Text style={styles.tipSubtitle}>
-                  {reading
-                    ? `PM2.5 ${reading.pm25} μg/m³ · ${category.label}`
-                    : 'Menghubungkan ke Open-Meteo'}
-                </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Buka riwayat kualitas udara"
+            onPress={() => router.push('/riwayat')}
+            style={({ pressed }) => [pressed && styles.cardPressed]}
+          >
+            <Card style={styles.compare}>
+              <View style={styles.compareIcon}>
+                <Wind size={20} color={color.accent} strokeWidth={1.8} />
               </View>
-            </View>
-          </Card>
+              <View style={styles.compareText}>
+                <Text style={styles.compareTitle}>Kualitas udara hari ini</Text>
+                <Text style={styles.compareSubtitle}>{comparison}</Text>
+              </View>
+              <ChevronRight size={18} color={color.mutedText} strokeWidth={1.8} />
+            </Card>
+          </Pressable>
         </FadeIn>
 
-        <FadeIn delay={180} style={styles.popularBlock}>
+        <FadeIn delay={120} style={styles.popularBlock}>
           <SectionTitle
             title="Lokasi Populer"
             action="Lihat semua"
@@ -239,24 +220,6 @@ export default function BerandaScreen() {
           </View>
         </FadeIn>
 
-        <FadeIn delay={240}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Buka Tips Kesehatan"
-            onPress={() => router.push('/tips')}
-            style={({ pressed }) => [pressed && styles.cardPressed]}
-          >
-            <Card style={styles.tips}>
-              <View style={styles.tipsRow}>
-                <Lightbulb size={17} color={color.accent} strokeWidth={1.8} />
-                <Text style={styles.tipsText}>
-                  Tips singkat: buka jendela saat pagi hari ketika kualitas udara masih terbaik.
-                </Text>
-              </View>
-            </Card>
-          </Pressable>
-        </FadeIn>
-
         <Pressable
           accessibilityRole="link"
           accessibilityLabel="Sumber data: Open-Meteo"
@@ -276,8 +239,8 @@ export default function BerandaScreen() {
 /** Shown only while the four popular-location reads are in flight. */
 const popularFallback = [
   { name: 'Monas', aqi: 0 },
-  { name: 'Sudirman', aqi: 0 },
-  { name: 'Menteng', aqi: 0 },
+  { name: 'Bundaran HI', aqi: 0 },
+  { name: 'GBK', aqi: 0 },
   { name: 'Kota Tua', aqi: 0 },
 ];
 
@@ -290,21 +253,27 @@ const styles = StyleSheet.create({
     paddingBottom: 21,
   },
   header: {
-    height: 60,
+    height: 56,
     paddingHorizontal: spacing.gutter,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  location: {
+  brand: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
-    paddingRight: 6,
-    borderRadius: radius.control,
-    marginLeft: -4,
-    paddingLeft: 4,
+    gap: 7,
+  },
+  brandGlyph: {
+    width: 30,
+    height: 30,
+  },
+  brandWord: {
+    fontFamily: font.extrabold,
+    fontSize: 21,
+    lineHeight: 26,
+    color: color.accent,
+    letterSpacing: -0.5,
   },
   pressed: {
     opacity: 0.6,
@@ -320,87 +289,101 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: color.bg,
   },
-  locationText: {
-    gap: 1,
+  locationRow: {
+    paddingHorizontal: spacing.gutter,
+    marginTop: 2,
+    marginBottom: 10,
   },
-  locationEyebrow: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  locationValue: {
-    ...typo.heading,
-    color: color.ink,
-  },
-  headerActions: {
+  location: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
+    backgroundColor: color.surface,
+    borderRadius: radius.pill,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 6,
+  },
+  locationText: {
+    ...typo.bodyStrong,
+    color: color.ink,
+  },
+  intro: {
+    paddingHorizontal: spacing.gutter,
+    gap: 4,
+    marginBottom: 12,
+  },
+  introTitle: {
+    ...typo.title,
+    color: color.ink,
+  },
+  introBody: {
+    ...typo.body,
+    color: color.mutedText,
+    maxWidth: 300,
   },
   hero: {
-    // Full-bleed, as drawn in the file (the export shows the gradient running
-    // edge to edge), unlike the inset cards below it.
-    width: '100%',
+    marginHorizontal: spacing.gutter,
     borderRadius: radius.card,
     overflow: 'hidden',
     alignItems: 'center',
-    paddingTop: 18,
+    paddingTop: 20,
     paddingBottom: 16,
     paddingHorizontal: 12,
   },
-  categoryPill: {
-    marginTop: 10,
-  },
-  headline: {
-    ...typo.bodyStrong,
-    color: color.ink,
-    textAlign: 'center',
-    marginTop: 14,
-  },
-  updated: {
-    ...typo.micro,
-    color: color.mutedText,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  weather: {
+  pmRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
-    marginTop: 12,
+    gap: 16,
+    marginTop: 14,
   },
-  weatherStat: {
-    flexDirection: 'row',
+  pmItem: {
     alignItems: 'center',
-    gap: 5,
+    gap: 1,
   },
-  weatherLabel: {
-    ...typo.stat,
+  pmLabel: {
+    ...typo.caption,
+    color: color.mutedText,
+  },
+  pmValue: {
+    ...typo.bodyStrong,
     color: color.ink,
+  },
+  pmDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: color.border,
   },
   sections: {
     paddingHorizontal: spacing.gutter,
-    paddingTop: 8,
+    paddingTop: 18,
     gap: spacing.section,
   },
-  tipCard: {
+  compare: {
     padding: 14,
-  },
-  tipRow: {
-    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  tipText: {
+  compareIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: color.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compareText: {
     flex: 1,
     gap: 2,
   },
-  tipTitle: {
+  compareTitle: {
     ...typo.bodyStrong,
     color: color.ink,
   },
-  tipSubtitle: {
+  compareSubtitle: {
     ...typo.caption,
     color: color.mutedText,
   },
@@ -410,16 +393,29 @@ const styles = StyleSheet.create({
   popularRow: {
     flexDirection: 'row',
     gap: 10,
+    justifyContent: 'space-between',
   },
   popular: {
     width: 80,
-    height: 140,
     gap: 5,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  popularPressed: {
-    opacity: 0.6,
+  popularPhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.control,
+  },
+  popularName: {
+    ...typo.caption,
+    fontFamily: font.bold,
+    color: color.ink,
+    maxWidth: 80,
+    textAlign: 'center',
+  },
+  popularValue: {
+    ...typo.caption,
+    fontFamily: font.bold,
+    fontSize: 11,
   },
   cardPressed: {
     opacity: 0.75,
@@ -432,47 +428,5 @@ const styles = StyleSheet.create({
     ...typo.micro,
     color: color.mutedText,
     textDecorationLine: 'underline',
-  },
-  popularTile: {
-    width: 80,
-    height: 80,
-    borderRadius: radius.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  popularName: {
-    ...typo.caption,
-    fontFamily: font.bold,
-    color: color.ink,
-    maxWidth: 80,
-    textAlign: 'center',
-  },
-  popularAqi: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  popularValue: {
-    ...typo.stat,
-    color: color.mutedText,
-  },
-  tips: {
-    padding: 13,
-  },
-  tipsRow: {
-    minHeight: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  tipsText: {
-    ...typo.caption,
-    flex: 1,
-    color: color.mutedText,
   },
 });

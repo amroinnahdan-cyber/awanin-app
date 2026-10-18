@@ -130,7 +130,7 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Tidak ada lokasi “{query}”</Text>
           <Text style={styles.emptyBody}>
-            Awanin baru memantau lima titik di Jakarta. Coba Monas, Sudirman, Menteng, atau Kota Tua.
+            Awanin baru memantau lima titik di Jakarta. Coba Monas, Bundaran HI, GBK, atau Kota Tua.
           </Text>
         </View>
       ) : null}

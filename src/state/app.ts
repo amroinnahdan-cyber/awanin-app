@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { JAKARTA_PUSAT, POPULAR_LOCATIONS, type Coordinates } from '@/api/openMeteo';
+import { loadPersisted, savePersisted } from '@/lib/persist';
 
 /**
  * App-wide state: which location every screen is looking at, the user's
@@ -8,9 +9,25 @@ import { JAKARTA_PUSAT, POPULAR_LOCATIONS, type Coordinates } from '@/api/openMe
  *
  * Same pattern as `state/notifications.ts` — a module-level store read through
  * `useSyncExternalStore` — so any screen can read or change it without a provider
- * and without prop drilling. It is deliberately in-memory: there is no backend,
- * and persisting would need a native storage module (a dev build), see README.
+ * and without prop drilling. The state is persisted with AsyncStorage
+ * (`lib/persist.ts`) and hydrated at startup, so choices survive a restart.
  */
+
+/**
+ * Placeholder profile shown on the Profil screen — the demo persona from the
+ * design showcase. There is no account system; change these two lines to rebrand.
+ */
+export type UserProfile = {
+  name: string;
+  email: string;
+  initials: string;
+};
+
+export const USER_PROFILE: UserProfile = {
+  name: 'Dzul Amroin',
+  email: 'dzulamroin@gmail.com',
+  initials: 'DA',
+};
 
 export type AppLocation = {
   slug: string;
@@ -40,10 +57,14 @@ export const ALL_LOCATIONS: AppLocation[] = [
 export type TemperatureUnit = 'C' | 'F';
 
 export type AppSettings = {
-  /** Warn when the AQI moves into a worse category */
+  /** Master switch — "Peringatan Kualitas Udara" */
+  notifMaster: boolean;
+  /** "Peringatan AQI Tinggi" — notify when the AQI category worsens */
   badAirAlerts: boolean;
-  /** A once-a-day summary of the reading */
-  dailySummary: boolean;
+  /** "Tips Kesehatan" — attach a health tip to notifications */
+  tipsHealth: boolean;
+  /** "Update Cuaca" — once-a-day digest of reading + weather */
+  weatherUpdate: boolean;
   temperatureUnit: TemperatureUnit;
 };
 
@@ -53,15 +74,34 @@ type AppState = {
   settings: AppSettings;
 };
 
-let state: AppState = {
-  selected: HOME_LOCATION,
-  favorites: ['monas'],
-  settings: { badAirAlerts: true, dailySummary: false, temperatureUnit: 'C' },
+const DEFAULT_SETTINGS: AppSettings = {
+  notifMaster: true,
+  badAirAlerts: true,
+  tipsHealth: true,
+  weatherUpdate: false,
+  temperatureUnit: 'C',
+};
+
+function defaultState(): AppState {
+  return { selected: HOME_LOCATION, favorites: ['monas'], settings: { ...DEFAULT_SETTINGS } };
+}
+
+let state: AppState = defaultState();
+
+type PersistedAppState = {
+  selectedSlug?: string;
+  favorites?: string[];
+  settings?: Partial<AppSettings>;
 };
 
 const listeners = new Set<() => void>();
 
 function emit() {
+  savePersisted('app', {
+    selectedSlug: state.selected.slug,
+    favorites: state.favorites,
+    settings: state.settings,
+  } satisfies PersistedAppState);
   listeners.forEach((listener) => listener());
 }
 
@@ -111,10 +151,18 @@ export function updateSettings(patch: Partial<AppSettings>) {
 
 /** Used by the profile's "Keluar" confirmation: back to a first-run state. */
 export function resetAppState() {
+  state = defaultState();
+  emit();
+}
+
+/** Hydrate from storage. Called once from the root layout before first paint. */
+export async function hydrateAppState(): Promise<void> {
+  const saved = await loadPersisted<PersistedAppState>('app');
+  if (!saved) return;
   state = {
-    selected: HOME_LOCATION,
-    favorites: [],
-    settings: { badAirAlerts: true, dailySummary: false, temperatureUnit: 'C' },
+    selected: findLocation(saved.selectedSlug ?? '') ?? HOME_LOCATION,
+    favorites: Array.isArray(saved.favorites) ? saved.favorites : state.favorites,
+    settings: { ...DEFAULT_SETTINGS, ...saved.settings },
   };
   emit();
 }

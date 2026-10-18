@@ -68,10 +68,34 @@ export function categoryFor(aqi: number): AqiCategory {
   return found;
 }
 
-/** Ring fill over the full 0-500 AQI scale, clamped to [0, 1]. */
+/**
+ * Ring fill over the AQI scale — piecewise, not linear.
+ *
+ * A straight 0-500 mapping buries everyday readings: AQI 50 fills 10% of the
+ * arc and Jakarta rarely exceeds 100, so the ring looked permanently empty.
+ * The stops below keep every category boundary at a fixed arc position (50 →
+ * 30%, 100 → 50%, 150 → 66%, 200 → 78%, 300 → 90%, 500 → 100%) while giving
+ * the common 0-100 band two thirds of the visual range. Monotonic and clamped.
+ */
+const GAUGE_STOPS: [number, number][] = [
+  [0, 0],
+  [50, 0.3],
+  [100, 0.5],
+  [150, 0.66],
+  [200, 0.78],
+  [300, 0.9],
+  [500, 1],
+];
+
 export function gaugeProgress(aqi: number): number {
   if (!Number.isFinite(aqi)) return 0;
-  return Math.min(Math.max(aqi, 0), AQI_SCALE_MAX) / AQI_SCALE_MAX;
+  const clamped = Math.min(Math.max(aqi, 0), AQI_SCALE_MAX);
+  for (let i = 1; i < GAUGE_STOPS.length; i += 1) {
+    const [x0, y0] = GAUGE_STOPS[i - 1];
+    const [x1, y1] = GAUGE_STOPS[i];
+    if (clamped <= x1) return y0 + ((clamped - x0) / (x1 - x0)) * (y1 - y0);
+  }
+  return 1;
 }
 
 /**

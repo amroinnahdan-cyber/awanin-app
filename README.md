@@ -1,6 +1,6 @@
 # Awanin — mobile app (Expo / React Native)
 
-Aplikasi kualitas udara untuk Jakarta Pusat, dibangun dari file Figma
+**Know Your Air** — aplikasi kualitas udara untuk Jakarta Pusat, dibangun dari file Figma
 **Awanin Mobile App** (canvas `Hi-Fi`, node `3:2`).
 
 ## Menjalankan
@@ -14,12 +14,14 @@ npx expo start       # tekan w / a / i, atau pakai Expo Go
 Pemeriksaan:
 
 ```bash
+npm install          # WAJIB dulu — lint memakai eslint lokal dari node_modules
+npm run lint         # = npx eslint .
 npx tsc --noEmit     # typecheck
-npx eslint .         # lint
 ```
 
-> `npx expo lint` gagal di mesin ini (ESLint 9 terpasang tapi CLI menolak versinya),
-> jadi lint dijalankan lewat `npx eslint .` langsung.
+> `npx expo lint` / `npx eslint .` tanpa `npm install` menarik ESLint dari registry
+> dengan versi berbeda yang menolak `eslint/config`, jadi script `lint` sekarang
+> langsung memanggil `eslint .` dengan dependensi lokal.
 
 ## Delapan layar (seluruh canvas Hi-Fi)
 
@@ -32,14 +34,14 @@ npx eslint .         # lint
 | `/profil` | Profil | `2027:8531` |
 | `/notifikasi` | Notifikasi | `2027:8607` |
 | `/tips` | Tips Kesehatan | `2027:8473` |
-| `/lokasi/[slug]` | Detail Lokasi (Monas, Sudirman, Menteng, Kota Tua) | `2027:8300` |
+| `/lokasi/[slug]` | Detail Lokasi (Monas, Bundaran HI, GBK, Kota Tua) | `2027:8300` |
 
 Navigasi memakai Expo Router (`src/app/`) dengan bottom nav kustom yang mengikuti
 geometri Figma: 12 top + 41 item + 18 gap + 4 home indicator + 7 bottom = 82.
 
-Alur yang sudah tersambung: bell di Beranda → Notifikasi, kartu "Tips singkat" → Tips
-Kesehatan, kartu Lokasi Populer → Detail Lokasi, kartu pratinjau Monas di Peta → Detail
-Monas, dan tombol "Lihat di peta" di Detail → Peta.
+Alur yang sudah tersambung: bell di Beranda → Notifikasi, kartu Lokasi Populer → Detail
+Lokasi, kartu pratinjau lokasi di Peta → Detail Lokasi, tombol "Lihat Rute" di Detail →
+Peta, dan kartu "Rekomendasi" di Detail → Tips Kesehatan.
 
 Splash mengikuti prototype Figma: latar `#d9eeff`, transisi 300ms ease-out, dan bisa
 diketuk untuk langsung masuk. Isinya memakai logo asli Awanin, bukan lagi ikon pengganti.
@@ -64,9 +66,28 @@ menghasilkan:
 | `assets/android-icon-background.png` | 1024² | latar adaptif `#f5f9ff` |
 | `assets/android-icon-monochrome.png` | 1024² | ikon bertema Android |
 
-Warna brand yang tersampel dari file: **`#245dc5`**. Perhatikan bahwa aksen UI dari
-Figma adalah **`#1854c8`** — dua biru yang berdekatan tapi tidak identik, jadi masih
-perlu keputusan mana yang jadi acuan sebelum rilis.
+Warna brand: **`#1854c8`** — dipakai seragam oleh logo (diolah ulang lewat
+[`tools/process-logo.py`](tools/process-logo.py)) dan aksen UI. Sumber logo asli
+(`assets/logo-source.png`) memang `#245dc5`; alpha unmixing tetap memakai warna
+asli itu, tetapi semua aset turunan dicat dengan `#1854c8` supaya aplikasi hanya
+memiliki satu biru brand.
+
+## Aset gambar showcase
+
+UI mengikuti design showcase **Awanin Air Quality App**. Gambar-gambarnya dihasilkan
+AI dan disimpan di `assets/`:
+
+| Aset | Dipakai untuk |
+|---|---|
+| `img-splash.jpg` | Ilustrasi Splash (langit, awan, skyline Monas) |
+| `img-monas.jpg` | Hero Detail Lokasi + tile Lokasi Populer + kartu pratinjau Peta |
+| `img-bundaran-hi.jpg` | idem, untuk Bundaran HI |
+| `img-gbk.jpg` | idem, untuk GBK |
+| `img-kota-tua.jpg` | idem, untuk Kota Tua |
+| `img-mascot.jpg` | Maskot awan di layar Tips Kesehatan |
+
+Lokasi yang dipantau mengikuti showcase: **Monas, Bundaran HI, GBK, Kota Tua**
+(ditambah Jakarta Pusat sebagai lokasi default) — sebelumnya Sudirman & Menteng.
 
 Tombol kembali memakai `useBackOrHome()` (`src/lib/navigation.ts`). Ini bukan sekadar
 `router.back()`: sub-layar bisa dibuka langsung lewat URL, dan pada kasus itu
@@ -93,13 +114,12 @@ bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
 1. **Warna teks sekunder.** `#8192ab` hanya mencapai 3,17:1 di atas putih (2,97:1 di atas
    `#f5f9ff`) sehingga gagal WCAG AA untuk teks kecil. Token `color.mutedText`
    (`#596b86`, 5,4:1) dipakai untuk teks < 18px; `#8192ab` tetap untuk ikon.
-2. **Label kategori AQI pindah ke bawah ring, bukan di dalamnya.** Ini keluhan
-   “desain tidak rapi”: di dalam ring, badge bertabrakan dengan busur — pada tinggi
-   badge, lebar dalam lingkaran hanya ~124px sementara "Tidak Sehat untuk Sensitif"
-   butuh ~154px, sehingga badge menutup stroke busur dan ujung busur menyembul di
-   bawahnya. Sekarang badge duduk di bawah ring (jarak bebas 24px ke tepi dalam
-   stroke) dan selalu satu baris. File Figma sendiri memiliki tabrakan ini; penyimpangan
-   ini sengaja.
+2. **Label kategori AQI memakai label pendek di dalam ring** (ala showcase), bukan
+   nama kategori panjang: pada tinggi badge, lebar dalam lingkaran hanya ~124px
+   sementara "Tidak Sehat untuk Sensitif" butuh ~154px. Badge di dalam ring karena
+   itu memakai `category.short` ("Baik", "Sedang", "Sensitif", …) dengan
+   `maxWidth 132px` + `numberOfLines=1`, sehingga tetap satu baris dan tidak
+   menabrak busur.
 3. **Ring tetap 174px** — sempat saya ubah ke 182px berdasarkan screenshot ber-zoom,
    lalu dikembalikan setelah diukur ulang dari export 1:1 (`beranda.png`): radius luar
    busur 86,9px, jadi 174px. Semua temuan ukuran lain dari screenshot itu juga
@@ -129,6 +149,15 @@ bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
    Geometrinya memakai persentase dan sudah dicocokkan: kotak datarnya sekarang
    x 127..264, y 173..434 (hero 390×322) versus 130..265, 176..374 di export.
 10. **Kontras & target sentuh** lain sengaja dibiarkan sesuai desain agar tetap setia.
+11. **Skala ring AQI dibuat piecewise, bukan linear 0–500.** Pemetaan linear membuat
+    bacaan sehari-hari (AQI 40–90) cuma mengisi 8–18% busur sehingga ring terasa
+    kosong. `gaugeProgress()` kini memetakan batas kategori ke posisi busur tetap
+    (50 → 30%, 100 → 50%, 150 → 66%, 200 → 78%, 300 → 90%, 500 → 100%): rentang
+    0–100 mendapat dua pertiga ruang visual. Legenda skala di bawahnya tetap linear
+    berlabel angka, karena sumbu berlabel harus jujur.
+12. **Profil memakai data contoh netral** (`USER_PROFILE` di `src/state/app.ts`):
+    "Pengguna Awanin" / inisial "PA". Tidak ada sistem akun, dan menanam nama asli
+    di dalam bundle adalah kebocoran privasi.
 
 ## Catatan implementasi yang mudah terlewat
 
@@ -144,32 +173,36 @@ bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
 
 ## Notifikasi: bukan data palsu
 
-Tidak ada backend, jadi layar Notifikasi **tidak** diisi riwayat karangan. Store
+Tidak ada backend, jadi feed notifikasi **tidak** diisi riwayat karangan. Store
 (`src/state/notifications.ts`) mulai kosong dan hanya mencatat kejadian nyata: perubahan
-kategori AQI yang teramati saat aplikasi berjalan. Karena itu tampilan awalnya adalah
-empty state, bukan daftar contoh.
+kategori AQI yang teramati saat aplikasi berjalan (tampil di kartu "Terbaru" pada layar
+Notifikasi). Layar Notifikasi sendiri mengikuti showcase: **pengaturan** yang
+benar-benar mengendalikan perilaku —
 
-## Yang masih perkiraan (perlu diverifikasi ke Figma)
+- **Peringatan Kualitas Udara** — sakelar induk untuk semua peringatan.
+- **Peringatan AQI Tinggi** — feed perubahan kategori (baseline tetap dilacak, jadi
+  menyalakan ulang tidak mengulang perubahan lama).
+- **Tips Kesehatan** — menyertakan tips singkat di badan tiap notifikasi.
+- **Update Cuaca** — ringkasan harian (AQI + cuaca), sekali per hari.
+- **Lokasi Notifikasi** — mengikuti lokasi yang dipilih.
 
-- **Isi Notifikasi, Tips Kesehatan, Detail Lokasi, dan Splash.** Keempat node ini tidak
-  pernah mengembalikan isi dari API (HTTP 429), jadi struktur layarnya mengikuti layar
-  lain yang sudah terbaca, dan copy-nya disusun sendiri. Angka di dalamnya tetap data
-  asli. Splash hanya diketahui latar `#d9eeff` dan transisi 300ms dari file.
+Riwayat notifikasi (maksimal 20), baseline kategori, dan pengaturan tersimpan di
+perangkat lewat AsyncStorage (`src/lib/persist.ts`, di web memakai localStorage),
+jadi tidak hilang saat aplikasi ditutup. "Bersihkan" & "Keluar" mengembalikan ke
+kondisi awal.
+
+Push notification tingkat OS (tetap masuk saat aplikasi tertutup) sengaja tidak
+dipasang: itu butuh `expo-notifications` + development build dan untuk notifikasi
+remote butuh backend — di luar jangkauan aplikasi tanpa server ini.
+
+## Yang masih perkiraan
 
 - **Geometri jalan & sungai di layar Peta.** Figma menyimpannya sebagai node gambar
-  vektor; permintaan `geometry=paths` selalu ditolak rate limit (HTTP 429). Saat ini
-  digambar sebagai jaringan jalan perkiraan. Posisi taman, label kawasan, dan marker
-  memakai koordinat asli dari file.
-- **Label baris Pengaturan di Profil** (`Notifikasi`, `Lokasi favorit`, `Unit & format`,
-  `Privasi & keamanan`, `Bantuan`, `Tentang Awanin`): teks node tidak ikut terkirim oleh
-  API (rate limit); ukuran baris (64), padding (16), dan pemisah tetap sesuai file.
-- **Kartu "Rekomendasi aktivitas"** dan **"Tips singkat"** di Beranda: sama, copy-nya
-  disusun ulang; angka di dalamnya memakai data asli.
-- **Sumber gambar** (foto lokasi, ilustrasi kota) tidak tersedia — diganti gradien
-  `#d9eeff → #eaf3ff`.
-- **Baris ketiga di bawah tiap tile "Lokasi Populer".** Di export, satu kolom tile
-  berisi: thumbnail (y 524..604), nama (614..622), lalu DUA baris lagi (634..642 dan
-  654..660). Implementasi kita hanya punya thumbnail + nama + baris nilai AQI. Copy dua
-  baris itu belum bisa dibaca (ukurannya 11px; probe PNG di `awanin-figma/` tidak
-  melakukan OCR), jadi tidak diisi dengan teks karangan.
-- **Pencarian lokasi** di Peta baru tampilan, belum fungsional.
+  vektor dan permintaan `geometry=paths` selalu ditolak rate limit (HTTP 429). Jaringan
+  jalan digambar ulang sebagai stylised map yang lebih padat (arteri melewati keempat
+  marker, sungai ala Ciliwung di sisi timur Monas), tetapi tetap bukan geometri asli.
+  Posisi taman, label kawasan, dan marker memakai koordinat dari file.
+
+Pencarian lokasi di Peta **berfungsi**: baris "Cari lokasi..." membuka
+sheet pemilih lokasi yang punya kolom pencarian nyata (filter nama/area, empty state,
+tombol hapus), plus chip filter kategori Semua / Baik / Sedang / Tidak Sehat.

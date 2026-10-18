@@ -8,6 +8,8 @@ import { View } from 'react-native';
 import { Inter_400Regular, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
 
 import { SplashScreen } from '@/components/SplashScreen';
+import { hydrateAppState } from '@/state/app';
+import { hydrateNotifications } from '@/state/notifications';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -17,6 +19,14 @@ export default function RootLayout() {
   });
   const [splashVisible, setSplashVisible] = useState(true);
   const hideSplash = useCallback(() => setSplashVisible(false), []);
+
+  // Restore persisted state (settings, favourites, notification history) while
+  // the splash is up. The splash has a minimum duration, so this rarely delays
+  // first paint — and never blocks it.
+  useEffect(() => {
+    void hydrateAppState();
+    void hydrateNotifications();
+  }, []);
 
   useEffect(() => {
     if (fontError) console.warn('Gagal memuat Inter, memakai font sistem.', fontError);

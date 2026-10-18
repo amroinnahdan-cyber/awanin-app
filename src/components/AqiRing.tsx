@@ -2,14 +2,16 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { useCountUp } from '@/components/motion';
-import { color, type as typo } from '@/theme/tokens';
+import { color, font, type as typo } from '@/theme/tokens';
 
 type AqiRingProps = {
   /** Numeric reading, or '—' while loading */
   value: number | string;
-  /** 0..1 fill over the 0-500 AQI scale */
+  /** 0..1 fill over the AQI scale */
   progress: number;
   categoryColor: string;
+  /** Category pill under the number, inside the ring (as in the showcase) */
+  badge?: { label: string; tone: string; textTone: string };
   size?: number;
 };
 
@@ -30,15 +32,10 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number): s
 }
 
 /**
- * Ring: 174px outer diameter, 14px stroke — re-measured against the 1:1 design
- * export (beranda.png), where the arc's outer radius is 86.9px.
- *
- * Only the reading belongs inside the ring. The category label lives below it:
- * at the bottom of the inner circle there is no room for a wide label (the inner
- * width at that height is ~131px, while "Tidak Sehat untuk Sensitif" is ~154px),
- * so a pill placed inside cuts through the arc.
+ * Ring: 174px outer diameter, 14px stroke. Centre column reads
+ * "AQI" label → big number → category pill, matching the showcase layout.
  */
-export function AqiRing({ value, progress, categoryColor, size = 174 }: AqiRingProps) {
+export function AqiRing({ value, progress, categoryColor, badge, size = 174 }: AqiRingProps) {
   const thickness = 14;
   const r = size / 2 - thickness / 2;
   const clamped = Math.min(Math.max(progress, 0), 1);
@@ -71,6 +68,13 @@ export function AqiRing({ value, progress, categoryColor, size = 174 }: AqiRingP
       <View style={styles.center}>
         <Text style={styles.unit}>AQI</Text>
         <Text style={styles.value}>{shown}</Text>
+        {badge ? (
+          <View style={[styles.badge, { backgroundColor: badge.tone }]}>
+            <Text style={[styles.badgeLabel, { color: badge.textTone }]} numberOfLines={1}>
+              {badge.label}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -89,11 +93,22 @@ const styles = StyleSheet.create({
   },
   unit: {
     ...typo.caption,
-    // muted (#8192ab) is only 2.98:1 on the hero gradient; intro text is small.
     color: color.mutedText,
   },
   value: {
     ...typo.display,
     color: color.ink,
+  },
+  badge: {
+    marginTop: 2,
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    maxWidth: 132,
+  },
+  badgeLabel: {
+    ...typo.caption,
+    fontFamily: font.bold,
+    fontSize: 12,
   },
 });

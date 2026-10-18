@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
@@ -8,26 +8,25 @@ import {
   Info,
   LogOut,
   MapPin,
-  MessageCircle,
-  Settings,
-  Shield,
-  Star,
+  Send,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
-import { Sheet, SheetRow, Segmented, SwitchRow } from '@/components/Sheet';
+import { LocationSheet } from '@/components/LocationSheet';
+import { Sheet, SheetRow, Segmented } from '@/components/Sheet';
 import { Card, Divider } from '@/components/ui';
 import { useTopInset } from '@/hooks/useTopInset';
 import {
   ALL_LOCATIONS,
   resetAppState,
-  toggleFavorite,
   updateSettings,
   useAppState,
+  USER_PROFILE,
 } from '@/state/app';
 import { color, font, radius, spacing, type as typo } from '@/theme/tokens';
 
-type SheetName = 'notifikasi' | 'favorit' | 'unit' | 'keluar' | null;
+type SheetName = 'preferensi' | 'keluar' | null;
 
 type SettingRow = {
   key: string;
@@ -35,65 +34,77 @@ type SettingRow = {
   value?: string;
   icon: (props: { size: number; color: string; strokeWidth: number }) => ReactNode;
   onPress: () => void;
+  trailing?: ReactNode;
 };
 
 /**
- * Row content is inferred: Figma nodes 2027:8550 / 2027:8557 / 2027:8564 / 2027:8571
- * came back without their child text (API rate limit), so the row height (64),
- * padding (16), gap (12) and dividers follow the file while the labels are typical
- * profile settings. Every row now opens something real.
+ * Profile rows follow the design showcase: location, notification toggle,
+ * preferences, about, share, sign out. Every row does something real.
  */
 export default function ProfilScreen() {
   const topInset = useTopInset();
   const { selected, favorites, settings } = useAppState();
   const [sheet, setSheet] = useState<SheetName>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const accountRows: SettingRow[] = [
+  const shareApp = () => {
+    void Share.share({
+      message:
+        'Awanin — Know Your Air. Pantau kualitas udara Jakarta lewat aplikasi ini: ' +
+        'AQI real-time, peta lokasi, riwayat, dan tips kesehatan.',
+    });
+  };
+
+  const rows: SettingRow[] = [
+    {
+      key: 'lokasi',
+      label: 'Lokasi Saya',
+      value: selected.name,
+      icon: MapPin,
+      onPress: () => setPickerOpen(true),
+    },
     {
       key: 'notifikasi',
       label: 'Notifikasi',
-      value: settings.badAirAlerts ? 'Aktif' : 'Nonaktif',
       icon: Bell,
-      onPress: () => setSheet('notifikasi'),
+      onPress: () => router.push('/notifikasi'),
+      trailing: (
+        <Switch
+          value={settings.notifMaster}
+          onValueChange={(next) => updateSettings({ notifMaster: next })}
+          trackColor={{ true: color.accent, false: color.border }}
+          thumbColor={color.surface}
+          accessibilityLabel="Aktifkan notifikasi"
+        />
+      ),
     },
     {
-      key: 'lokasi',
-      label: 'Lokasi favorit',
-      value: `${favorites.length}`,
-      icon: MapPin,
-      onPress: () => setSheet('favorit'),
-    },
-    {
-      key: 'unit',
-      label: 'Unit & format',
-      value: `°${settings.temperatureUnit}`,
-      icon: Settings,
-      onPress: () => setSheet('unit'),
-    },
-    {
-      key: 'privasi',
-      label: 'Privasi & keamanan',
-      icon: Shield,
-      onPress: () => router.push('/privasi'),
-    },
-  ];
-
-  const generalRows: SettingRow[] = [
-    {
-      key: 'bantuan',
-      label: 'Bantuan',
-      icon: MessageCircle,
-      onPress: () => router.push('/bantuan'),
+      key: 'preferensi',
+      label: 'Preferensi',
+      value: 'AQI, Lokasi, Satuan',
+      icon: SlidersHorizontal,
+      onPress: () => setSheet('preferensi'),
     },
     {
       key: 'tentang',
       label: 'Tentang Awanin',
+      value: 'v1.0.0',
       icon: Info,
       onPress: () => router.push('/tentang'),
     },
+    {
+      key: 'bagikan',
+      label: 'Beritahu Teman',
+      icon: Send,
+      onPress: shareApp,
+    },
+    {
+      key: 'keluar',
+      label: 'Keluar',
+      icon: LogOut,
+      onPress: () => setSheet('keluar'),
+    },
   ];
-
-  const groups = [accountRows, generalRows];
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -108,160 +119,93 @@ export default function ProfilScreen() {
       <View style={styles.sections}>
         <Card tone="tint" style={styles.identity}>
           <LinearGradient colors={[color.sky, color.tint]} style={styles.avatar}>
-            <Text style={styles.initials}>DN</Text>
+            <Text style={styles.initials}>{USER_PROFILE.initials}</Text>
           </LinearGradient>
           <View style={styles.identityText}>
-            <Text style={styles.name}>Dzul Nahdan</Text>
-            <Text style={styles.handle}>{selected.name} · {selected.area}</Text>
+            <Text style={styles.name}>{USER_PROFILE.name}</Text>
+            <Text style={styles.handle}>{USER_PROFILE.email}</Text>
           </View>
         </Card>
 
-        {groups.map((rows, groupIndex) => (
-          <Card key={groupIndex} style={styles.group}>
-            {rows.map((row, index) => (
-              <View key={row.key}>
-                {index > 0 ? <Divider /> : null}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={row.label}
-                  onPress={row.onPress}
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                >
-                  <row.icon size={20} color={color.accent} strokeWidth={1.8} />
-                  <Text style={styles.rowLabel}>{row.label}</Text>
-                  {row.value ? <Text style={styles.rowValue}>{row.value}</Text> : null}
-                  <ChevronRight size={18} color={color.muted} strokeWidth={1.8} />
-                </Pressable>
-              </View>
-            ))}
-          </Card>
-        ))}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Keluar"
-          onPress={() => setSheet('keluar')}
-          style={({ pressed }) => [styles.logout, pressed && styles.rowPressed]}
-        >
-          <LogOut size={18} color={color.accent} strokeWidth={1.8} />
-          <Text style={styles.logoutLabel}>Keluar</Text>
-        </Pressable>
+        <Card style={styles.group}>
+          {rows.map((row, index) => (
+            <View key={row.key}>
+              {index > 0 ? <Divider /> : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={row.label}
+                onPress={row.onPress}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              >
+                <row.icon size={20} color={color.accent} strokeWidth={1.8} />
+                <Text style={styles.rowLabel}>{row.label}</Text>
+                {row.value ? <Text style={styles.rowValue}>{row.value}</Text> : null}
+                {row.trailing ?? <ChevronRight size={18} color={color.muted} strokeWidth={1.8} />}
+              </Pressable>
+            </View>
+          ))}
+        </Card>
       </View>
 
-      <Sheet
-        visible={sheet === 'notifikasi'}
-        title="Notifikasi"
-        subtitle="Awanin mengabari saat kategori udara berubah"
-        onClose={() => setSheet(null)}
-      >
-        <SwitchRow
-          label="Peringatan udara buruk"
-          hint="Saat kategori berpindah ke Tidak Sehat atau lebih buruk"
-          value={settings.badAirAlerts}
-          onChange={(next) => updateSettings({ badAirAlerts: next })}
-        />
-        <SwitchRow
-          label="Ringkasan harian"
-          hint="Satu ringkasan AQI setiap pagi"
-          value={settings.dailySummary}
-          onChange={(next) => updateSettings({ dailySummary: next })}
-        />
-        <SheetRow
-          label="Buka daftar notifikasi"
-          hint="Perubahan kategori yang tercatat sesi ini"
-          onPress={() => {
-            setSheet(null);
-            router.push('/notifikasi');
-          }}
-        />
-      </Sheet>
+      <LocationSheet visible={pickerOpen} onClose={() => setPickerOpen(false)} />
 
       <Sheet
-        visible={sheet === 'favorit'}
-        title="Lokasi favorit"
-        subtitle="Tandai lokasi agar cepat dipilih di Beranda"
+        visible={sheet === 'preferensi'}
+        title="Preferensi"
+        subtitle={`Lokasi favorit: ${favorites.length} · Skala US AQI`}
         onClose={() => setSheet(null)}
       >
-        {ALL_LOCATIONS.map((entry) => {
-          const isFavorite = favorites.includes(entry.slug);
-          return (
-            <SheetRow
-              key={entry.slug}
-              icon={
-                <Star
-                  size={16}
-                  color={isFavorite ? color.caution : color.muted}
-                  fill={isFavorite ? color.caution : 'transparent'}
-                  strokeWidth={1.8}
-                />
-              }
-              label={entry.name}
-              hint={entry.area}
-              trailing={
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    isFavorite ? `Hapus ${entry.name} dari favorit` : `Simpan ${entry.name} ke favorit`
-                  }
-                  hitSlop={8}
-                  onPress={() => toggleFavorite(entry.slug)}
-                >
-                  <Text style={styles.favoriteAction}>
-                    {isFavorite ? 'Hapus' : 'Simpan'}
-                  </Text>
-                </Pressable>
-              }
-            />
-          );
-        })}
-        <SheetRow
-          label="Kelola di peta"
-          hint="Pilih lokasi dan lihat sebarannya"
-          onPress={() => {
-            setSheet(null);
-            router.push('/peta');
-          }}
-        />
-      </Sheet>
-
-      <Sheet
-        visible={sheet === 'unit'}
-        title="Unit & format"
-        subtitle="Berlaku di Beranda dan halaman detail"
-        onClose={() => setSheet(null)}
-      >
-        <Text style={styles.sheetLabel}>Suhu</Text>
-        <Segmented
-          options={[
-            { value: 'C', label: '°C' },
-            { value: 'F', label: '°F' },
-          ]}
-          value={settings.temperatureUnit}
-          onChange={(next) => updateSettings({ temperatureUnit: next })}
-        />
-        <SheetRow
-          label="Kecepatan angin"
-          value="km/j"
-          hint="Satuan tetap, mengikuti data Open-Meteo"
-        />
+        <SheetRow label="Satuan suhu" hint="Dipakai di Beranda & Detail Lokasi" />
+        <View style={styles.segment}>
+          <Segmented
+            options={[
+              { label: '°C', value: 'C' },
+              { label: '°F', value: 'F' },
+            ]}
+            value={settings.temperatureUnit}
+            onChange={(next) =>
+              updateSettings({ temperatureUnit: next as 'C' | 'F' })
+            }
+          />
+        </View>
+        <Divider />
+        {ALL_LOCATIONS.map((entry) => (
+          <SheetRow
+            key={entry.slug}
+            icon={<MapPin size={18} color={color.accent} strokeWidth={1.8} />}
+            label={entry.name}
+            hint={entry.area}
+            value={favorites.includes(entry.slug) ? 'Favorit' : undefined}
+          />
+        ))}
       </Sheet>
 
       <Sheet
         visible={sheet === 'keluar'}
         title="Keluar dari Awanin?"
-        subtitle="Pilihan lokasi, favorit, dan pengaturan kembali ke awal"
+        subtitle="Pengaturan & favorit akan dikembalikan ke kondisi awal."
         onClose={() => setSheet(null)}
       >
-        <SheetRow
-          label="Ya, keluar"
-          hint="Data hanya ada di sesi ini, jadi tidak ada yang dihapus permanen"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ya, keluar"
           onPress={() => {
             resetAppState();
             setSheet(null);
-            router.navigate('/');
           }}
-        />
-        <SheetRow label="Batal" onPress={() => setSheet(null)} />
+          style={({ pressed }) => [styles.logoutConfirm, pressed && styles.rowPressed]}
+        >
+          <LogOut size={18} color={color.surface} strokeWidth={2} />
+          <Text style={styles.logoutConfirmLabel}>Ya, keluar</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Batal"
+          onPress={() => setSheet(null)}
+          style={({ pressed }) => [styles.logoutCancel, pressed && styles.rowPressed]}
+        >
+          <Text style={styles.logoutCancelLabel}>Batal</Text>
+        </Pressable>
       </Sheet>
     </ScrollView>
   );
@@ -273,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.bg,
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   header: {
     height: 56,
@@ -287,33 +231,31 @@ const styles = StyleSheet.create({
   sections: {
     paddingHorizontal: spacing.gutter,
     gap: spacing.section,
+    marginTop: 6,
   },
   identity: {
-    padding: 18,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
-    minHeight: 91,
   },
   avatar: {
-    width: 55,
-    height: 55,
+    width: 52,
+    height: 52,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   initials: {
-    fontFamily: font.bold,
-    fontSize: 15,
-    lineHeight: 21,
+    ...typo.heading,
     color: color.accent,
   },
   identityText: {
-    gap: 1,
-    flex: 1,
+    gap: 2,
   },
   name: {
     ...typo.heading,
+    fontSize: 16,
     color: color.ink,
   },
   handle: {
@@ -321,19 +263,23 @@ const styles = StyleSheet.create({
     color: color.mutedText,
   },
   group: {
-    padding: 16,
+    paddingHorizontal: 4,
   },
   row: {
-    minHeight: 64,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingHorizontal: 12,
+    borderRadius: radius.control,
   },
   rowPressed: {
-    opacity: 0.6,
+    backgroundColor: color.tint,
+    opacity: 0.9,
   },
   rowLabel: {
     ...typo.body,
+    fontFamily: font.bold,
     flex: 1,
     color: color.ink,
   },
@@ -341,28 +287,35 @@ const styles = StyleSheet.create({
     ...typo.caption,
     color: color.mutedText,
   },
-  logout: {
-    height: 44,
-    borderRadius: radius.control,
-    backgroundColor: color.tint,
+  segment: {
+    paddingHorizontal: 6,
+    paddingBottom: 10,
+  },
+  logoutConfirm: {
+    height: 50,
+    borderRadius: radius.card,
+    backgroundColor: color.accent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  logoutLabel: {
+  logoutConfirmLabel: {
     ...typo.bodyStrong,
-    color: color.accent,
+    fontSize: 14,
+    color: color.surface,
   },
-  favoriteAction: {
-    ...typo.caption,
-    fontFamily: font.bold,
-    color: color.accent,
+  logoutCancel: {
+    height: 50,
+    borderRadius: radius.card,
+    backgroundColor: color.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
   },
-  sheetLabel: {
-    ...typo.caption,
-    color: color.mutedText,
-    paddingHorizontal: 6,
-    paddingTop: 4,
+  logoutCancelLabel: {
+    ...typo.bodyStrong,
+    fontSize: 14,
+    color: color.ink,
   },
 });

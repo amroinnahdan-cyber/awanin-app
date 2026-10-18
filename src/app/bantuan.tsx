@@ -14,9 +14,9 @@ export default function BantuanScreen() {
           ring, misalnya “Diperbarui pukul 16.00 WIB”.
         </InfoFaq>
         <InfoFaq question="Kenapa beberapa lokasi menunjukkan angka yang sama?">
-          Grid model udara Open-Meteo selebar ±11 km, jadi Jakarta Pusat, Monas, Menteng, dan Kota
-          Tua jatuh di sel yang sama. Angka yang identik berarti titik-titik itu memang satu sel,
-          bukan bug.
+          Grid model udara Open-Meteo selebar ±11 km, jadi Jakarta Pusat, Monas, dan Bundaran HI
+          jatuh di sel yang sama. Angka yang identik berarti titik-titik itu memang satu sel,
+          bukan bug. GBK dan Kota Tua ada di sel tetangga, jadi angkanya bisa berbeda.
         </InfoFaq>
         <InfoFaq question="Apa arti warnanya?">
           Hijau (0–50) Baik, kuning (51–100) Sedang, oranye (101–150) Tidak Sehat untuk Sensitif,

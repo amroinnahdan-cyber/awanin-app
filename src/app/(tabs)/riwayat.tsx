@@ -10,18 +10,18 @@ import { Sheet, SheetRow } from '@/components/Sheet';
 import { Card, Chip, InlineError, SectionTitle, Skeleton } from '@/components/ui';
 import { useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor, dayLabel, pollutantBand } from '@/lib/aqi';
+import { categoryFor, dayLabel, pollutantBand, readableOn } from '@/lib/aqi';
 import { useAppState } from '@/state/app';
-import { color, radius, spacing, type as typo } from '@/theme/tokens';
+import { color, font, radius, spacing, type as typo } from '@/theme/tokens';
 
 /** Open-Meteo keeps 92 days of hourly history; 90 is the largest clean window. */
 const CUSTOM_RANGES = [14, 60, 90];
 
-/** AQI 100 is the first "unhealthy for sensitive groups" boundary. */
-const SENSITIVE_THRESHOLD = 100;
-
-const PLOT_WIDTH = 318;
+const AXIS_WIDTH = 24;
+const PLOT_WIDTH = 294;
 const PLOT_HEIGHT = 140;
+const Y_MAX = 200;
+const Y_TICKS = [0, 50, 100, 150, 200];
 
 function Chart({ points }: { points: { day: string; avg: number }[] }) {
   if (points.length === 0) {
@@ -32,76 +32,86 @@ function Chart({ points }: { points: { day: string; avg: number }[] }) {
     );
   }
 
-  const values = points.map((point) => point.avg);
-  // Always include the 100 threshold in the window, so a flat "good" week still
-  // shows how far below the sensitive-group boundary it sat.
-  const min = Math.min(...values, SENSITIVE_THRESHOLD);
-  const max = Math.max(...values, SENSITIVE_THRESHOLD + 1);
-  const span = Math.max(max - min, 1);
-
-  const yFor = (value: number) => PLOT_HEIGHT - ((value - min) / span) * (PLOT_HEIGHT - 16) - 8;
+  const yFor = (value: number) => {
+    const clamped = Math.min(Math.max(value, 0), Y_MAX);
+    return PLOT_HEIGHT - (clamped / Y_MAX) * (PLOT_HEIGHT - 16) - 8;
+  };
   const step = points.length > 1 ? PLOT_WIDTH / (points.length - 1) : 0;
   const coords = points.map((point, index) => ({ x: index * step, y: yFor(point.avg) }));
-  const thresholdY = yFor(SENSITIVE_THRESHOLD);
 
   const line = coords.map((coord, index) => `${index === 0 ? 'M' : 'L'} ${coord.x} ${coord.y}`).join(' ');
   const area = `${line} L ${coords[coords.length - 1].x} ${PLOT_HEIGHT} L 0 ${PLOT_HEIGHT} Z`;
+  const last = coords[coords.length - 1];
 
   return (
-    <View>
-      <Svg width={PLOT_WIDTH} height={PLOT_HEIGHT}>
-        {[0, 0.5, 1].map((ratio) => (
-          <Line
-            key={ratio}
-            x1={0}
-            x2={PLOT_WIDTH}
-            y1={ratio * (PLOT_HEIGHT - 16) + 8}
-            y2={ratio * (PLOT_HEIGHT - 16) + 8}
-            stroke={color.border}
-            strokeWidth={1}
-          />
-        ))}
-        <Line
-          x1={0}
-          x2={PLOT_WIDTH}
-          y1={thresholdY}
-          y2={thresholdY}
-          stroke={color.caution}
-          strokeWidth={1}
-          strokeDasharray="4 4"
-        />
-        <Path d={area} fill={color.accent} fillOpacity={0.12} />
-        <Path d={line} stroke={color.accent} strokeWidth={2} fill="none" strokeLinejoin="round" />
-        {coords.map((coord, index) => (
-          <Path
-            key={points[index].day}
-            d={`M ${coord.x} ${coord.y - 3} A 3 3 0 1 1 ${coord.x - 0.01} ${coord.y - 3} Z`}
-            fill={categoryFor(points[index].avg).color}
-          />
-        ))}
-      </Svg>
-      <Text style={[styles.thresholdLabel, { top: thresholdY - 13 }]}>Ambang 100</Text>
-      <View style={styles.chartLabels}>
-        {points.map((point, index) => (
+    <View style={styles.chartWrap}>
+      <View style={{ width: AXIS_WIDTH }}>
+        {Y_TICKS.slice().reverse().map((tick) => (
           <Text
-            key={point.day}
-            style={[
-              styles.chartLabel,
-              {
-                left: index * step,
-                color:
-                  points.length <= 7 ||
-                  index === 0 ||
-                  index === points.length - 1 ||
-                  index % 5 === 0
-                    ? color.mutedText
-                    : 'transparent',
-              },
-            ]}
+            key={tick}
+            style={[styles.yTick, { top: yFor(tick) - 7 }]}
           >
-            {dayLabel(point.day)}
+            {tick}
           </Text>
         ))}
+      </View>
+      <View>
+        <Svg width={PLOT_WIDTH} height={PLOT_HEIGHT}>
+          {Y_TICKS.map((tick) => (
+            <Line
+              key={tick}
+              x1={0}
+              x2={PLOT_WIDTH}
+              y1={yFor(tick)}
+              y2={yFor(tick)}
+              stroke={color.border}
+              strokeWidth={1}
+            />
+          ))}
+          <Path d={area} fill={color.accent} fillOpacity={0.12} />
+          <Path d={line} stroke={color.accent} strokeWidth={2} fill="none" strokeLinejoin="round" />
+          {coords.map((coord, index) => (
+            <Path
+              key={points[index].day}
+              d={`M ${coord.x} ${coord.y - 3} A 3 3 0 1 1 ${coord.x - 0.01} ${coord.y - 3} Z`}
+              fill={categoryFor(points[index].avg).color}
+            />
+          ))}
+        </Svg>
+
+        {/* Value bubble on the newest point, as in the showcase */}
+        <View
+          style={[
+            styles.tooltip,
+            { left: Math.min(Math.max(last.x - 18, 0), PLOT_WIDTH - 36), top: last.y - 32 },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.tooltipLabel}>{points[points.length - 1].avg}</Text>
+        </View>
+
+        <View style={styles.chartLabels}>
+          {points.map((point, index) => (
+            <Text
+              key={point.day}
+              style={[
+                styles.chartLabel,
+                {
+                  left: index * step,
+                  color:
+                    points.length <= 7 ||
+                    index === 0 ||
+                    index === points.length - 1 ||
+                    index % 5 === 0
+                      ? color.mutedText
+                      : 'transparent',
+                },
+              ]}
+            >
+              {dayLabel(point.day)}
+            </Text>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -116,17 +126,12 @@ export default function RiwayatScreen() {
   const history = useSelectedHistory(range);
   const air = useSelectedAir();
   const isCustom = range !== 7 && range !== 30;
-  const periodLabel = `${range} hari`;
 
   const days = history.data ?? [];
   const averages = days.map((day) => day.avg);
   const mean = averages.length
     ? Math.round((averages.reduce((total, value) => total + value, 0) / averages.length) * 10) / 10
     : 0;
-  const first = averages[0] ?? 0;
-  const last = averages[averages.length - 1] ?? 0;
-  const delta = Math.round((last - first) * 10) / 10;
-  const improving = delta <= 0;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -175,19 +180,25 @@ export default function RiwayatScreen() {
           <Card style={styles.historyCard}>
             <View style={styles.summary}>
               <View>
-                <Text style={styles.summaryCaption}>Rata-rata {periodLabel}</Text>
+                <Text style={styles.summaryCaption}>Rata-rata AQI</Text>
                 {history.data ? (
                   <Text style={styles.summaryValue}>{mean}</Text>
                 ) : (
                   <Skeleton width={54} height={20} style={styles.summarySkeleton} />
                 )}
               </View>
-              <View style={styles.summaryTrend}>
-                <Text style={styles.summaryCaption}>Tren</Text>
-                <Text style={[styles.trendValue, { color: improving ? color.good : color.caution }]}>
-                  {history.data ? `${improving ? '▼' : '▲'} ${Math.abs(delta)}` : '—'}
-                </Text>
-              </View>
+              {history.data ? (
+                <View style={[styles.summaryBadge, { backgroundColor: categoryFor(mean).color }]}>
+                  <Text
+                    style={[
+                      styles.summaryBadgeLabel,
+                      { color: readableOn(categoryFor(mean).color) },
+                    ]}
+                  >
+                    {categoryFor(mean).short}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             <Chart points={days} />
@@ -212,19 +223,16 @@ export default function RiwayatScreen() {
         <Card style={styles.pollutants}>
           {(air.data?.pollutants ?? []).map((pollutant) => (
             <View key={pollutant.key} style={styles.pollutantRow}>
+              <View
+                style={[
+                  styles.pollutantDot,
+                  { backgroundColor: pollutantBand(pollutant.key, pollutant.value).color },
+                ]}
+              />
               <Text style={styles.pollutantName}>{pollutant.label}</Text>
-              <View style={styles.pollutantTrack}>
-                <View
-                  style={[
-                    styles.pollutantFill,
-                    {
-                      width: `${pollutantBand(pollutant.key, pollutant.value).progress * 100}%`,
-                      backgroundColor: pollutantBand(pollutant.key, pollutant.value).color,
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={styles.pollutantValue}>{pollutant.value}</Text>
+              <Text style={styles.pollutantValue}>
+                {pollutant.value} {pollutant.unit}
+              </Text>
             </View>
           ))}
           {air.error && !air.data ? (
@@ -320,8 +328,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  summaryTrend: {
-    alignItems: 'flex-end',
+  summaryBadge: {
+    borderRadius: 100,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  summaryBadgeLabel: {
+    ...typo.caption,
+    fontFamily: font.bold,
+    fontSize: 12,
   },
   summaryCaption: {
     ...typo.caption,
@@ -331,20 +346,36 @@ const styles = StyleSheet.create({
     ...typo.title,
     color: color.ink,
   },
-  trendValue: {
-    ...typo.heading,
-  },
   pressed: {
     opacity: 0.65,
   },
   summarySkeleton: {
     marginTop: 4,
   },
-  thresholdLabel: {
+  chartWrap: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  yTick: {
     position: 'absolute',
-    right: 0,
+    right: 4,
     ...typo.micro,
-    color: color.caution,
+    color: color.mutedText,
+    textAlign: 'right',
+  },
+  tooltip: {
+    position: 'absolute',
+    minWidth: 36,
+    alignItems: 'center',
+    backgroundColor: color.accent,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  tooltipLabel: {
+    ...typo.caption,
+    fontFamily: font.bold,
+    color: color.surface,
   },
   credit: {
     ...typo.micro,
@@ -399,25 +430,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  pollutantDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   pollutantName: {
     ...typo.stat,
-    width: 60,
-    color: color.mutedText,
-  },
-  pollutantTrack: {
     flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: color.tint,
-    overflow: 'hidden',
-  },
-  pollutantFill: {
-    height: 8,
-    borderRadius: 4,
+    color: color.mutedText,
   },
   pollutantValue: {
     ...typo.stat,
-    minWidth: 48,
+    fontFamily: font.bold,
     textAlign: 'right',
     color: color.ink,
   },

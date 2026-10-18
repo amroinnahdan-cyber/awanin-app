@@ -25,6 +25,10 @@ import sys
 import zlib
 
 BRAND_BG = (245, 249, 255)  # color.bg in the design tokens
+# The source artwork is #245dc5, but the UI accent (color.accent, verified from
+# the Figma export) is #1854c8. Every derived asset is painted with the accent so
+# the app ships one brand blue; the untouched original stays in logo-source.png.
+BRAND_INK = (24, 84, 200)  # #1854c8
 BG_THRESHOLD = 12
 CROP_PADDING = 0.06
 BAND_THRESHOLD = 0.08
@@ -245,8 +249,12 @@ def main(source):
     os.makedirs(assets, exist_ok=True)
 
     width, height, channels, pixels = decode_png(source)
-    alpha, box, brand = build_alpha(width, height, channels, pixels)
-    print(f"source {width}x{height} box {box} brand #%02x%02x%02x" % brand)
+    alpha, box, sampled = build_alpha(width, height, channels, pixels)
+    print(f"source {width}x{height} box {box} sampled #%02x%02x%02x" % sampled)
+    # Paint with the unified brand ink; alpha unmixing above still uses the true
+    # source colour, so the cut-out stays exact.
+    brand = BRAND_INK
+    print("painting #%02x%02x%02x" % brand)
 
     with open(source, "rb") as src, open(os.path.join(assets, "logo-source.png"), "wb") as dst:
         dst.write(src.read())

@@ -60,11 +60,19 @@ function useAsync<T>(
 
 /** Current AQI + weather for Jakarta Pusat; also feeds the notification store. */
 export function useCurrentAir() {
+  const { settings } = useAppState();
   return useAsync<CurrentReading>(async () => {
     const reading = await fetchCurrentReading();
-    recordReading({ aqi: reading.aqi, observedAt: reading.observedAt });
+    recordReading(
+      { aqi: reading.aqi, observedAt: reading.observedAt },
+      {
+        alertsEnabled: settings.notifMaster && settings.badAirAlerts,
+        dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
+        tipsEnabled: settings.tipsHealth,
+      },
+    );
     return reading;
-  }, []);
+  }, [settings.notifMaster, settings.badAirAlerts, settings.weatherUpdate, settings.tipsHealth]);
 }
 
 /**
@@ -73,12 +81,25 @@ export function useCurrentAir() {
  * the notification feed, as useCurrentAir does for the default location).
  */
 export function useSelectedAir() {
-  const { selected } = useAppState();
+  const { selected, settings } = useAppState();
   return useAsync<CurrentReading>(async () => {
     const reading = await fetchCurrentReading(selected.location);
-    recordReading({ aqi: reading.aqi, observedAt: reading.observedAt, place: selected.name });
+    recordReading(
+      { aqi: reading.aqi, observedAt: reading.observedAt, place: selected.name },
+      {
+        alertsEnabled: settings.notifMaster && settings.badAirAlerts,
+        dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
+        tipsEnabled: settings.tipsHealth,
+      },
+    );
     return reading;
-  }, [selected.slug]);
+  }, [
+    selected.slug,
+    settings.notifMaster,
+    settings.badAirAlerts,
+    settings.weatherUpdate,
+    settings.tipsHealth,
+  ]);
 }
 
 /** Daily AQI series for the history chart (7 or 30 days). */
