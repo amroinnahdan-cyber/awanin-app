@@ -1,6 +1,7 @@
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ChevronRight, ExternalLink } from 'lucide-react-native';
 
 import { InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen';
 import { ATTRIBUTION } from '@/api/openMeteo';
@@ -15,7 +16,7 @@ const FACTS = [
 
 export default function TentangScreen() {
   return (
-    <InfoScreen title="Tentang Awanin" subtitle="Kualitas udara Jakarta, setiap saat">
+    <InfoScreen title="Tentang Awanin" subtitle="Pemantau kualitas udara Jakarta">
       <InfoSection>
         <View style={styles.identity}>
           <LinearGradient colors={[color.sky, color.tint]} style={styles.badge}>
@@ -23,7 +24,7 @@ export default function TentangScreen() {
           </LinearGradient>
           <View style={styles.identityText}>
             <Text style={styles.name}>Awanin</Text>
-            <Text style={styles.tagline}>Pemantau kualitas udara Jakarta</Text>
+            <Text style={styles.tagline}>Know Your Air</Text>
           </View>
         </View>
 
@@ -61,9 +62,9 @@ export default function TentangScreen() {
       <InfoSection title="Catatan resolusi" delay={120}>
         <InfoParagraph>
           Model kualitas udara Open-Meteo punya resolusi grid sekitar 11 km. Jakarta Pusat, Monas,
-          Menteng, dan Kota Tua berada di dalam sel grid yang sama, sehingga angkanya bisa identik
-          — itu batas resolusi sumber data, bukan kesalahan pembacaan. Sudirman jatuh di sel
-          tetangga dan karena itu sering berbeda.
+          dan Bundaran HI berada di dalam sel grid yang sama, sehingga angkanya bisa identik
+          — itu batas resolusi sumber data, bukan kesalahan pembacaan. GBK dan Kota Tua jatuh di
+          sel tetangga dan karena itu sering berbeda.
         </InfoParagraph>
       </InfoSection>
 
@@ -72,6 +73,36 @@ export default function TentangScreen() {
           Expo + React Native, TypeScript, dan react-native-svg untuk gauge dan grafiknya. Desain
           mengikuti file Figma “Awanin — Mobile App” dengan penyesuaian kontras aksesibilitas.
         </InfoParagraph>
+      </InfoSection>
+
+      <InfoSection title="Lainnya" delay={240}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Buka Privasi & keamanan"
+          onPress={() => router.push('/privasi')}
+          style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+        >
+          <Text style={styles.linkLabel}>Privasi & keamanan</Text>
+          <ChevronRight size={15} color={color.accent} strokeWidth={1.8} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Buka Bantuan"
+          onPress={() => router.push('/bantuan')}
+          style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+        >
+          <Text style={styles.linkLabel}>Bantuan</Text>
+          <ChevronRight size={15} color={color.accent} strokeWidth={1.8} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Buka Tips Kesehatan"
+          onPress={() => router.push('/tips')}
+          style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+        >
+          <Text style={styles.linkLabel}>Tips Kesehatan</Text>
+          <ChevronRight size={15} color={color.accent} strokeWidth={1.8} />
+        </Pressable>
       </InfoSection>
     </InfoScreen>
   );

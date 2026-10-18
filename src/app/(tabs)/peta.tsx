@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
@@ -7,9 +15,11 @@ import { Check, ChevronRight, MapPin, Navigation, Search } from 'lucide-react-na
 
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { LocationSheet } from '@/components/LocationSheet';
+import { Chip } from '@/components/ui';
 import { useLocationDirectory } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
 import { categoryFor } from '@/lib/aqi';
+import { placeImage } from '@/lib/placeImages';
 import { HOME_LOCATION, selectLocation, useAppState } from '@/state/app';
 import { color, font, radius, shadow, spacing, type as typo } from '@/theme/tokens';
 
@@ -38,10 +48,27 @@ const DISTRICTS = [
 /** Marker circles: left/top of the 43px dot, as percentages of the map area. */
 const MARKERS = [
   { name: 'Monas', x: 25.64, y: 33.15 },
-  { name: 'Sudirman', x: 18.85, y: 55.15 },
-  { name: 'Menteng', x: 70.51, y: 25.63 },
-  { name: 'Kota Tua', x: 73.08, y: 64.76 },
+  { name: 'Kota Tua', x: 73.08, y: 22.6 },
+  { name: 'GBK', x: 16.5, y: 62.5 },
+  { name: 'Bundaran HI', x: 70.51, y: 64.76 },
 ];
+
+/** Category filter chips, as in the showcase. */
+const FILTERS = [
+  { key: 'semua', label: 'Semua' },
+  { key: 'baik', label: 'Baik' },
+  { key: 'sedang', label: 'Sedang' },
+  { key: 'tidak', label: 'Tidak Sehat' },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]['key'];
+
+function matchesFilter(filter: FilterKey, aqi: number | undefined): boolean {
+  if (filter === 'semua' || aqi === undefined) return true;
+  if (filter === 'baik') return aqi <= 50;
+  if (filter === 'sedang') return aqi > 50 && aqi <= 100;
+  return aqi > 100;
+}
 
 const slugFor = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
@@ -50,6 +77,7 @@ export default function PetaScreen() {
   const directory = useLocationDirectory();
   const { selected } = useAppState();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [filter, setFilter] = useState<FilterKey>('semua');
 
   const aqiBySlug = useMemo(() => {
     const map = new Map<string, number>();
@@ -68,7 +96,13 @@ export default function PetaScreen() {
       </View>
 
       <View style={styles.map}>
-        {/* Road network: approximate — see note in the file summary. */}
+        {/*
+          Stylised road network, still hand-drawn (Figma keeps the real geometry
+          in vector image nodes the API would not serve). Arterials pass the four
+          landmarks the markers pin: the Sudirman–Thamrin spine through the two
+          western markers, a boulevard bending down to Kota Tua, and the
+          Ciliwung-ish river running north–south just west of Menteng.
+        */}
         <Svg
           style={StyleSheet.absoluteFill}
           width="100%"
@@ -76,33 +110,56 @@ export default function PetaScreen() {
           viewBox="0 0 390 718"
           preserveAspectRatio="none"
         >
+          {/* River — drawn first so roads bridge over it */}
           <Path
-            d="M 162 -20 C 182 120 118 244 152 360 C 184 470 118 560 140 740"
+            d="M 212 740 C 200 640 238 575 228 500 C 218 425 252 360 244 288 C 236 220 258 140 252 -20"
             stroke={color.river}
             strokeWidth={12}
             fill="none"
             strokeLinecap="round"
           />
           <Path
-            d="M -20 500 C 100 472 162 380 222 260 C 262 180 322 122 410 92"
+            d="M 228 500 C 190 488 160 470 142 442"
+            stroke={color.river}
+            strokeWidth={5}
+            fill="none"
+            strokeLinecap="round"
+          />
+          {/* Arterials */}
+          <Path
+            d="M -20 530 C 40 480 66 436 76 392 C 90 330 96 286 100 238 C 106 176 112 96 120 -20"
             stroke="#ffffff"
             strokeWidth={12}
             fill="none"
             strokeLinecap="round"
           />
           <Path
-            d="M -20 200 C 120 232 244 300 410 296"
+            d="M -20 300 C 55 292 92 276 128 258 C 198 224 242 318 262 398 C 272 436 280 452 288 468 C 312 522 348 602 410 652"
             stroke="#ffffff"
             strokeWidth={12}
             fill="none"
             strokeLinecap="round"
           />
-          <Path d="M 10 148 C 120 132 240 122 380 118" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 20 618 C 140 600 260 578 372 558" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 62 18 C 88 200 108 420 124 700" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 250 12 C 272 200 288 430 302 700" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 30 340 C 150 322 260 336 386 356" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 320 40 C 336 180 344 320 336 470" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path
+            d="M 390 108 C 338 118 302 146 278 182 C 252 220 198 236 148 242"
+            stroke="#ffffff"
+            strokeWidth={8}
+            fill="none"
+            strokeLinecap="round"
+          />
+          {/* Secondary streets */}
+          <Path d="M 8 92 C 90 80 170 72 260 78 C 310 82 350 92 386 106" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 4 166 C 70 152 148 142 226 148 C 288 152 340 166 388 184" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M -6 348 C 60 336 132 330 196 342 C 252 352 316 372 392 382" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M -4 438 C 72 424 150 418 214 432 C 268 444 330 468 392 478" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 6 596 C 92 578 176 566 252 574 C 312 580 356 596 388 614" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 30 12 C 52 140 70 286 78 420 C 84 530 84 640 74 716" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 166 8 C 176 120 180 240 172 356 C 166 470 172 602 188 716" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 306 4 C 312 118 306 236 296 344 C 288 452 298 596 322 714" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 358 60 C 350 180 346 320 352 448 C 356 540 368 626 382 700" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 12 668 C 110 646 210 638 300 652" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 226 236 C 258 262 292 278 330 284" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 96 486 C 132 502 158 526 174 558" stroke="#ffffff" strokeWidth={4} fill="none" />
         </Svg>
 
         {PARKS.map((park, index) => (
@@ -130,7 +187,7 @@ export default function PetaScreen() {
           </Text>
         ))}
 
-        {MARKERS.map((marker) => {
+        {MARKERS.filter((marker) => matchesFilter(filter, aqiFor(marker.name))).map((marker) => {
           const aqi = aqiFor(marker.name);
           const category = aqi === undefined ? null : categoryFor(aqi);
           const isSelected = selected.slug === slugFor(marker.name);
@@ -173,13 +230,24 @@ export default function PetaScreen() {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Cari lokasi di Jakarta"
+          accessibilityLabel="Cari lokasi"
           onPress={() => setPickerOpen(true)}
           style={({ pressed }) => [styles.search, pressed && styles.pressed]}
         >
           <Search size={20} color={color.muted} strokeWidth={1.8} />
-          <Text style={styles.searchLabel}>Cari lokasi di Jakarta</Text>
+          <Text style={styles.searchLabel}>Cari lokasi...</Text>
         </Pressable>
+
+        <View style={styles.filterRow}>
+          {FILTERS.map((entry) => (
+            <Chip
+              key={entry.key}
+              label={entry.label}
+              active={filter === entry.key}
+              onPress={() => setFilter(entry.key)}
+            />
+          ))}
+        </View>
 
         <Pressable
           accessibilityRole="button"
@@ -198,9 +266,13 @@ export default function PetaScreen() {
             router.push({ pathname: '/lokasi/[slug]', params: { slug: selected.slug } })
           }
         >
-          <LinearGradient colors={[color.sky, color.tint]} style={styles.previewPhoto}>
-            <MapPin size={20} color={color.accent} strokeWidth={1.8} />
-          </LinearGradient>
+          {placeImage(selected.slug) ? (
+            <Image source={placeImage(selected.slug) as number} style={styles.previewPhoto} />
+          ) : (
+            <LinearGradient colors={[color.sky, color.tint]} style={styles.previewPhoto}>
+              <MapPin size={20} color={color.accent} strokeWidth={1.8} />
+            </LinearGradient>
+          )}
           <View style={styles.previewInfo}>
             <Text style={styles.previewTitle}>{selected.name}</Text>
             <Text style={styles.previewSubtitle}>{selected.area}</Text>
@@ -314,6 +386,13 @@ const styles = {
   searchLabel: {
     ...typo.body,
     color: color.muted,
+  },
+  filterRow: {
+    position: 'absolute',
+    left: spacing.gutter,
+    top: 67,
+    flexDirection: 'row',
+    gap: 8,
   },
   recenter: {
     position: 'absolute',

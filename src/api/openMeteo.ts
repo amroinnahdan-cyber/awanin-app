@@ -40,6 +40,8 @@ export type CurrentReading = {
   temperature: number;
   humidity: number;
   wind: number;
+  /** WMO weather code from the forecast API */
+  weatherCode: number;
   pollutants: PollutantReading[];
 };
 
@@ -56,17 +58,14 @@ export type DayAqi = {
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 
-/** The four locations shown in Figma's map markers and popular-location cards. */
+/** The four locations shown in the showcase: Monas, Bundaran HI, GBK, Kota Tua. */
 export const POPULAR_LOCATIONS: { name: string; location: Coordinates }[] = [
   { name: 'Monas', location: { latitude: -6.179, longitude: 106.8271, timezone: 'Asia/Jakarta' } },
   {
-    name: 'Sudirman',
-    location: { latitude: -6.2088, longitude: 106.818, timezone: 'Asia/Jakarta' },
+    name: 'Bundaran HI',
+    location: { latitude: -6.1949, longitude: 106.823, timezone: 'Asia/Jakarta' },
   },
-  {
-    name: 'Menteng',
-    location: { latitude: -6.195, longitude: 106.838, timezone: 'Asia/Jakarta' },
-  },
+  { name: 'GBK', location: { latitude: -6.2185, longitude: 106.8022, timezone: 'Asia/Jakarta' } },
   {
     name: 'Kota Tua',
     location: { latitude: -6.135, longitude: 106.813, timezone: 'Asia/Jakarta' },
@@ -78,6 +77,22 @@ type ApiResponse = {
   hourly?: { time?: (string | null)[]; us_aqi?: (number | null)[]; pm2_5?: (number | null)[] };
   current_units?: Record<string, string>;
 };
+
+/** WMO weather interpretation codes → short Indonesian copy ("Cerah berawan", …). */
+export function weatherLabel(code: number): string {
+  if (code === 0) return 'Cerah';
+  if (code === 1) return 'Cerah berawan';
+  if (code === 2) return 'Berawan sebagian';
+  if (code === 3) return 'Mendung';
+  if (code === 45 || code === 48) return 'Berkabut';
+  if (code >= 51 && code <= 57) return 'Gerimis';
+  if (code >= 61 && code <= 67) return 'Hujan';
+  if (code >= 71 && code <= 77) return 'Salju';
+  if (code >= 80 && code <= 82) return 'Hujan lebat';
+  if (code >= 85 && code <= 86) return 'Salju lebat';
+  if (code >= 95) return 'Badai petir';
+  return 'Tidak diketahui';
+}
 
 function numberOr(value: number | string | null | undefined, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -136,7 +151,7 @@ async function loadCurrentReading(location: Coordinates): Promise<CurrentReading
   });
   const weatherQuery = new URLSearchParams({
     ...common,
-    current: 'temperature_2m,relative_humidity_2m,wind_speed_10m',
+    current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code',
   });
 
   const [air, weather] = await Promise.all([
@@ -150,13 +165,14 @@ async function loadCurrentReading(location: Coordinates): Promise<CurrentReading
   const pollutants: PollutantReading[] = [
     { key: 'pm2_5', label: 'PM2.5', value: numberOr(aqi.pm2_5), unit: 'μg/m³' },
     { key: 'pm10', label: 'PM10', value: numberOr(aqi.pm10), unit: 'μg/m³' },
+    { key: 'o3', label: 'O₃', value: numberOr(aqi.ozone), unit: 'μg/m³' },
     {
       key: 'no2',
       label: 'NO₂',
       value: numberOr(aqi.nitrogen_dioxide),
       unit: 'μg/m³',
     },
-    { key: 'o3', label: 'O₃', value: numberOr(aqi.ozone), unit: 'μg/m³' },
+    { key: 'so2', label: 'SO₂', value: numberOr(aqi.sulphur_dioxide), unit: 'μg/m³' },
   ];
 
   return {
@@ -167,6 +183,7 @@ async function loadCurrentReading(location: Coordinates): Promise<CurrentReading
     temperature: numberOr(wx.temperature_2m),
     humidity: numberOr(wx.relative_humidity_2m),
     wind: numberOr(wx.wind_speed_10m),
+    weatherCode: numberOr(wx.weather_code),
     pollutants,
   };
 }

@@ -1,58 +1,44 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Activity, ArrowLeft, Clock, HeartPulse, ShieldCheck, Wind } from 'lucide-react-native';
+import { ArrowLeft, Droplets, Leaf, ShieldCheck, Wind } from 'lucide-react-native';
 
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { Card } from '@/components/ui';
-import { useCurrentAir } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
 import { useBackOrHome } from '@/lib/navigation';
-import { categoryFor } from '@/lib/aqi';
-import { color, radius, spacing, type as typo } from '@/theme/tokens';
+import { color, font, radius, spacing, type as typo } from '@/theme/tokens';
 
-/**
- * Figma node 2027:8473 exposes only the frame (the API never returned its children
- * because of rate limiting), so the layout follows the other sub-screens and the
- * copy is general air-quality guidance rather than text lifted from the file.
- */
+/** The four tips from the design showcase. */
 const TIPS = [
-  {
-    key: 'rentan',
-    icon: HeartPulse,
-    title: 'Kenali kelompok rentan',
-    body: 'Anak-anak, lansia, ibu hamil, serta penderita asma dan gangguan jantung paling cepat terpengaruh polusi.',
-  },
-  {
-    key: 'waktu',
-    icon: Clock,
-    title: 'Atur waktu beraktivitas',
-    body: 'Konsentrasi polutan biasanya memuncak siang hingga sore. Olahraga luar ruang lebih aman pagi hari.',
-  },
   {
     key: 'masker',
     icon: ShieldCheck,
-    title: 'Pakai masker bila perlu',
-    body: 'Masker respirator (N95) lebih efektif menahan partikel halus PM2.5 dibanding masker kain.',
+    title: 'Gunakan masker',
+    body: 'saat kualitas udara menurun (terutama PM2.5).',
   },
   {
-    key: 'ruang',
+    key: 'aktivitas',
     icon: Wind,
-    title: 'Jaga udara dalam ruang',
-    body: 'Saat indeks tinggi, tutup jendela, bersihkan filter AC, dan hindari pembakaran di dalam ruang.',
+    title: 'Kurangi aktivitas berat',
+    body: 'di luar ruangan saat AQI tinggi.',
   },
   {
-    key: 'pantau',
-    icon: Activity,
-    title: 'Pantau indeks setiap hari',
-    body: 'Kategori Baik sampai Sedang umumnya aman untuk sebagian besar orang. Cek Awanin sebelum keluar.',
+    key: 'air',
+    icon: Droplets,
+    title: 'Perbanyak minum air putih',
+    body: 'agar tubuh tetap terhidrasi.',
+  },
+  {
+    key: 'tanaman',
+    icon: Leaf,
+    title: 'Gunakan tanaman',
+    body: 'penyaring udara di dalam ruangan.',
   },
 ];
 
 export default function TipsScreen() {
   const topInset = useTopInset();
   const goBack = useBackOrHome();
-  const air = useCurrentAir();
-  const category = categoryFor(air.data?.aqi ?? 0);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -66,6 +52,7 @@ export default function TipsScreen() {
           accessibilityLabel="Kembali"
           hitSlop={12}
           onPress={goBack}
+          style={({ pressed }) => [pressed && styles.pressed]}
         >
           <ArrowLeft size={20} color={color.accent} strokeWidth={1.8} />
         </Pressable>
@@ -73,28 +60,40 @@ export default function TipsScreen() {
       </View>
 
       <View style={styles.sections}>
-        <Card style={[styles.status, { borderLeftColor: category.color }]}>
-          <Text style={styles.statusLabel}>
-            {air.data ? `Kategori saat ini: ${category.label}` : 'Memuat kategori…'}
+        <View style={styles.mascotWrap}>
+          <Image
+            source={require('../../assets/img-mascot.jpg')}
+            style={styles.mascot}
+            resizeMode="cover"
+          />
+        </View>
+
+        <View style={styles.intro}>
+          <Text style={styles.introTitle}>Tips hari ini</Text>
+          <Text style={styles.introBody}>
+            Lindungi diri dari polusi udara dengan kebiasaan sederhana berikut:
           </Text>
-          <Text style={styles.statusBody}>
-            {air.data
-              ? category.message
-              : 'Menghubungkan ke Open-Meteo untuk membaca kondisi terkini.'}
-          </Text>
-        </Card>
+        </View>
 
         {TIPS.map((tip) => (
           <Card key={tip.key} style={styles.tip}>
             <View style={styles.tipIcon}>
               <tip.icon size={20} color={color.accent} strokeWidth={1.8} />
             </View>
-            <View style={styles.tipText}>
+            <Text style={styles.tipText}>
               <Text style={styles.tipTitle}>{tip.title}</Text>
-              <Text style={styles.tipBody}>{tip.body}</Text>
-            </View>
+              {'\n'}
+              {tip.body}
+            </Text>
           </Card>
         ))}
+
+        <Card tone="tint" style={styles.banner}>
+          <View style={styles.bannerIcon}>
+            <Wind size={19} color={color.accent} strokeWidth={1.8} />
+          </View>
+          <Text style={styles.bannerText}>Udara bersih, masa depan lebih baik.</Text>
+        </Card>
 
         <Text style={styles.disclaimer}>
           Panduan umum, bukan pengganti nasihat medis. Bila memiliki kondisi pernapasan,
@@ -125,52 +124,83 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.ink,
   },
+  pressed: {
+    opacity: 0.6,
+  },
   sections: {
     paddingHorizontal: spacing.gutter,
-    gap: spacing.section,
+    gap: 14,
   },
-  status: {
-    padding: 16,
+  mascotWrap: {
+    borderRadius: radius.card,
+    overflow: 'hidden',
+    backgroundColor: color.sky,
+  },
+  mascot: {
+    width: '100%',
+    height: 170,
+  },
+  intro: {
     gap: 4,
-    borderLeftWidth: 4,
+    marginTop: 4,
   },
-  statusLabel: {
-    ...typo.bodyStrong,
+  introTitle: {
+    ...typo.title,
     color: color.ink,
   },
-  statusBody: {
+  introBody: {
     ...typo.body,
     color: color.mutedText,
   },
   tip: {
     padding: 14,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    alignItems: 'flex-start',
   },
   tipIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.control,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: color.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tipText: {
+    ...typo.body,
     flex: 1,
-    gap: 3,
+    color: color.mutedText,
+    lineHeight: 18,
   },
   tipTitle: {
     ...typo.bodyStrong,
     color: color.ink,
   },
-  tipBody: {
-    ...typo.body,
-    color: color.mutedText,
+  banner: {
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  bannerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerText: {
+    ...typo.bodyStrong,
+    flex: 1,
+    color: color.ink,
+    fontFamily: font.bold,
   },
   disclaimer: {
     ...typo.micro,
     color: color.mutedText,
     textAlign: 'center',
+    marginTop: 4,
   },
 });

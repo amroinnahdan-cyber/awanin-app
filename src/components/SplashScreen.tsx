@@ -3,14 +3,16 @@ import {
   Animated,
   Easing,
   Image,
+  ImageBackground,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  View,
 } from 'react-native';
 
 import { useTopInset } from '@/hooks/useTopInset';
-import { color, spacing, type as typo } from '@/theme/tokens';
+import { color, font, type as typo } from '@/theme/tokens';
 
 type Props = {
   /** Called once the fade-out finishes. */
@@ -20,10 +22,9 @@ type Props = {
 };
 
 /**
- * Splash Screen (Figma node 2027:8125): background #d9eeff, tap-to-continue in the
- * prototype, 300ms ease-out transition to Beranda — mirrored here with Animated.
- * The file exposes only the frame and its prototype link, so the wordmark,
- * tagline and cloud glyph are my additions.
+ * Splash: full-bleed sky illustration with the cloud glyph centred and the
+ * wordmark + slogan parked low, as in the design showcase. Tap-to-continue and
+ * a 300ms ease-out fade, mirroring the Figma prototype.
  */
 export function SplashScreen({ onDone, duration = 1100 }: Props) {
   const [opacity] = useState(() => new Animated.Value(1));
@@ -44,21 +45,31 @@ export function SplashScreen({ onDone, duration = 1100 }: Props) {
   }, [duration, finish]);
 
   return (
-    <Animated.View style={[styles.root, { opacity, paddingTop: topInset }]}>
-      <Pressable
-        style={styles.center}
-        accessibilityRole="button"
-        accessibilityLabel="Awanin, ketuk untuk mulai"
-        onPress={finish}
+    <Animated.View style={[styles.root, { opacity }]}>
+      <ImageBackground
+        source={require('../../assets/img-splash.jpg')}
+        style={styles.art}
+        resizeMode="cover"
       >
-        <Image
-          source={require('../../assets/logo-lockup.png')}
-          style={styles.logo}
-          resizeMode="contain"
-          accessibilityIgnoresInvertColors
-        />
-        <Text style={styles.tagline}>Kualitas udara Jakarta, setiap saat</Text>
-      </Pressable>
+        <View style={[styles.center, { paddingTop: topInset }]}>
+          <Image
+            source={require('../../assets/logo-mark.png')}
+            style={styles.glyph}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
+        </View>
+
+        <Pressable
+          style={styles.footer}
+          accessibilityRole="button"
+          accessibilityLabel="Awanin, ketuk untuk mulai"
+          onPress={finish}
+        >
+          <Text style={styles.wordmark}>awanin</Text>
+          <Text style={styles.tagline}>Know Your Air</Text>
+        </Pressable>
+      </ImageBackground>
     </Animated.View>
   );
 }
@@ -70,23 +81,37 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.sky,
     zIndex: 10,
+    elevation: 10,
+    backgroundColor: color.sky,
+  },
+  art: {
+    flex: 1,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
-    paddingHorizontal: spacing.gutter,
+    paddingBottom: 60,
   },
-  logo: {
-    width: 300,
-    height: 226,
+  glyph: {
+    width: 168,
+    height: 168,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingBottom: 76,
+    gap: 6,
+  },
+  wordmark: {
+    fontFamily: font.extrabold,
+    fontSize: 40,
+    lineHeight: 48,
+    color: color.accent,
+    letterSpacing: -1,
   },
   tagline: {
-    ...typo.body,
-    color: color.mutedText,
-    textAlign: 'center',
+    ...typo.heading,
+    color: color.ink,
   },
 });

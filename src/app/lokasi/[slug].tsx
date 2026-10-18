@@ -1,18 +1,18 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ArrowUpRight, Check, Droplets, Star, Sun, Wind } from 'lucide-react-native';
+import { ArrowLeft, CloudSun, HeartPulse, MapPin, Navigation, Star } from 'lucide-react-native';
 
+import { weatherLabel } from '@/api/openMeteo';
 import { AqiRing } from '@/components/AqiRing';
-import { DeviceStatusBar } from '@/components/DeviceStatusBar';
-import { AqiLegend, Card, CategoryPill, HeroGlow, InlineError } from '@/components/ui';
+import { Card, InlineError } from '@/components/ui';
 import { useLocationAir } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
 import { formatTemperature } from '@/lib/format';
 import { useBackOrHome } from '@/lib/navigation';
-import { categoryFor, formatWib, gaugeProgress, pollutantBand, readableOn } from '@/lib/aqi';
+import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
+import { placeImage } from '@/lib/placeImages';
 import {
-  ALL_LOCATIONS,
   findLocation,
   selectLocation,
   toggleFavorite,
@@ -25,7 +25,7 @@ export default function DetailLokasiScreen() {
   const goBack = useBackOrHome('/peta');
   const params = useLocalSearchParams<{ slug?: string }>();
   const slug = typeof params.slug === 'string' ? params.slug : '';
-  const { selected, favorites, settings } = useAppState();
+  const { favorites, settings } = useAppState();
   const entry = findLocation(slug);
   const air = useLocationAir(entry ? entry.location : null);
 
@@ -33,174 +33,164 @@ export default function DetailLokasiScreen() {
   const aqi = reading?.aqi ?? 0;
   const category = categoryFor(aqi);
   const name = entry?.name ?? 'Lokasi';
-  const isHome = selected.slug === slug;
   const isFavorite = favorites.includes(slug);
+  const hero = placeImage(slug);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={{ paddingTop: topInset }}>
-        <DeviceStatusBar />
-      </View>
-
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Kembali"
-          hitSlop={12}
-          onPress={goBack}
-        >
-          <ArrowLeft size={20} color={color.accent} strokeWidth={1.8} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>{name}</Text>
-          <Text style={styles.headerSubtitle}>{entry?.area ?? 'Jakarta'}</Text>
-        </View>
-        {entry ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              isFavorite ? `Hapus ${name} dari favorit` : `Simpan ${name} ke favorit`
-            }
-            accessibilityState={{ selected: isFavorite }}
-            hitSlop={10}
-            onPress={() => toggleFavorite(slug)}
-            style={({ pressed }) => [styles.star, pressed && styles.pressed]}
-          >
-            <Star
-              size={19}
-              color={isFavorite ? color.caution : color.muted}
-              fill={isFavorite ? color.caution : 'transparent'}
-              strokeWidth={1.8}
-            />
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View style={styles.sections}>
-        {!entry ? (
-          <InlineError message={`Lokasi "${slug}" tidak dikenal`} />
-        ) : air.error && !reading ? (
-          <InlineError message={air.error} onRetry={() => void air.reload()} />
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        {hero ? (
+          <ImageBackground source={hero} style={styles.hero} resizeMode="cover">
+            <View style={[styles.heroOverlay, { paddingTop: topInset }]} />
+          </ImageBackground>
         ) : (
-          <>
-            <LinearGradient colors={[color.heroSky, '#eef6ff']} style={styles.hero}>
-              <HeroGlow />
-
-              <AqiRing
-                value={reading ? aqi : '—'}
-                progress={gaugeProgress(aqi)}
-                categoryColor={reading ? category.color : color.track}
-              />
-
-              <CategoryPill
-                label={reading ? category.label : 'Memuat'}
-                tone={reading ? category.color : color.track}
-                textTone={readableOn(reading ? category.color : color.track)}
-                style={styles.pill}
-              />
-
-              <Text style={styles.headline}>
-                {reading ? category.message : 'Menghubungkan ke Open-Meteo'}
-              </Text>
-              <Text style={styles.updated}>
-                {reading
-                  ? `Diperbarui pukul ${formatWib(reading.observedAt)}`
-                  : 'Menunggu pembacaan'}
-              </Text>
-
-              <View style={styles.weather}>
-                <View style={styles.weatherStat}>
-                  <Sun size={17} color={color.accent} strokeWidth={1.8} />
-                  <Text style={styles.weatherLabel}>
-                    {reading
-                      ? formatTemperature(reading.temperature, settings.temperatureUnit)
-                      : '—'}
-                  </Text>
-                </View>
-                <View style={styles.weatherStat}>
-                  <Droplets size={16} color={color.accent} strokeWidth={1.8} />
-                  <Text style={styles.weatherLabel}>
-                    {reading ? `${reading.humidity}%` : '—'}
-                  </Text>
-                </View>
-                <View style={styles.weatherStat}>
-                  <Wind size={17} color={color.accent} strokeWidth={1.8} />
-                  <Text style={styles.weatherLabel}>
-                    {reading ? `${reading.wind} km/j` : '—'}
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient>
-
-            <AqiLegend value={reading ? aqi : undefined} />
-
-            <Card style={styles.pollutants}>
-              <Text style={styles.cardTitle}>Polutan utama</Text>
-              {(reading?.pollutants ?? []).map((pollutant) => {
-                const band = pollutantBand(pollutant.key, pollutant.value);
-                return (
-                  <View key={pollutant.key} style={styles.pollutantRow}>
-                    <Text style={styles.pollutantName}>{pollutant.label}</Text>
-                    <View style={styles.pollutantTrack}>
-                      <View
-                        style={[
-                          styles.pollutantFill,
-                          { width: `${band.progress * 100}%`, backgroundColor: band.color },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.pollutantValue}>{pollutant.value}</Text>
-                  </View>
-                );
-              })}
-              {!reading ? (
-                <Text style={styles.caption}>Memuat pembacaan polutan…</Text>
-              ) : null}
-            </Card>
-
-            <View style={styles.actions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isHome ? 'Lokasi ini sedang dipakai' : `Pakai ${name} sebagai lokasi utama`}
-                accessibilityState={{ selected: isHome, disabled: isHome }}
-                disabled={isHome}
-                onPress={() => selectLocation(slug)}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  isHome && styles.primaryButtonDone,
-                  pressed && styles.pressed,
-                ]}
-              >
-                {isHome ? (
-                  <Check size={17} color={color.ink} strokeWidth={2.4} />
-                ) : null}
-                <Text style={[styles.primaryLabel, isHome && styles.primaryLabelDone]}>
-                  {isHome ? 'Lokasi utama kamu' : 'Jadikan lokasi utama'}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.mapButton, pressed && styles.pressed]}
-                onPress={() => router.push('/peta')}
-              >
-                <ArrowUpRight size={18} color={color.accent} strokeWidth={1.8} />
-                <Text style={styles.mapButtonLabel}>Lihat di peta</Text>
-              </Pressable>
-            </View>
-          </>
+          <LinearGradient
+            colors={[color.heroSky, '#eef6ff']}
+            style={[styles.hero, { paddingTop: topInset }]}
+          />
         )}
 
-        <Text style={styles.caption}>
-          Lokasi lain:{' '}
-          {ALL_LOCATIONS.filter((item) => item.slug !== slug)
-            .map((item) => item.name)
-            .join(', ')}
-        </Text>
-      </View>
-    </ScrollView>
+        <View style={[styles.heroActions, { top: topInset + 8 }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Kembali"
+            hitSlop={10}
+            onPress={goBack}
+            style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+          >
+            <ArrowLeft size={19} color={color.accent} strokeWidth={2} />
+          </Pressable>
+          {entry ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                isFavorite ? `Hapus ${name} dari favorit` : `Simpan ${name} ke favorit`
+              }
+              accessibilityState={{ selected: isFavorite }}
+              hitSlop={10}
+              onPress={() => toggleFavorite(slug)}
+              style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+            >
+              <Star
+                size={19}
+                color={isFavorite ? color.caution : color.accent}
+                fill={isFavorite ? color.caution : 'transparent'}
+                strokeWidth={2}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.sections}>
+          <View style={styles.titleRow}>
+            <View style={styles.titleText}>
+              <Text style={styles.title}>{name}</Text>
+              <View style={styles.areaRow}>
+                <MapPin size={13} color={color.mutedText} strokeWidth={2} />
+                <Text style={styles.area}>{entry?.area ?? 'Jakarta'}</Text>
+              </View>
+            </View>
+          </View>
+
+          {!entry ? (
+            <InlineError message={`Lokasi "${slug}" tidak dikenal`} />
+          ) : air.error && !reading ? (
+            <InlineError message={air.error} onRetry={() => void air.reload()} />
+          ) : (
+            <>
+              <Card style={styles.stats}>
+                <View style={styles.ringWrap}>
+                  <AqiRing
+                    value={reading ? aqi : '—'}
+                    progress={gaugeProgress(aqi)}
+                    categoryColor={reading ? category.color : color.track}
+                    badge={{
+                      label: reading ? category.short : 'Memuat',
+                      tone: reading ? category.color : color.track,
+                      textTone: readableOn(reading ? category.color : color.track),
+                    }}
+                    size={148}
+                  />
+                </View>
+                <View style={styles.pollutants}>
+                  {(reading?.pollutants ?? PLACEHOLDER_POLLUTANTS).map((pollutant) => (
+                    <View key={pollutant.key} style={styles.pollutantRow}>
+                      <Text style={styles.pollutantLabel}>{pollutant.label}</Text>
+                      <Text style={styles.pollutantValue}>
+                        {pollutant.value}{' '}
+                        <Text style={styles.pollutantUnit}>{pollutant.unit}</Text>
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Buka Tips Kesehatan"
+                onPress={() => router.push('/tips')}
+                style={({ pressed }) => [pressed && styles.pressed]}
+              >
+                <Card style={styles.recommend}>
+                  <View style={styles.recommendIcon}>
+                    <HeartPulse size={19} color={color.accent} strokeWidth={1.8} />
+                  </View>
+                  <View style={styles.recommendText}>
+                    <Text style={styles.recommendTitle}>Rekomendasi</Text>
+                    <Text style={styles.recommendBody}>
+                      {reading
+                        ? `${category.message} Kamu bisa beraktivitas ${aqi <= 100 ? 'seperti biasa dengan tetap menjaga kesehatan' : 'di dalam ruangan lebih dulu sampai kondisi membaik'}.`
+                        : 'Menghubungkan ke Open-Meteo untuk membaca kondisi terkini.'}
+                    </Text>
+                  </View>
+                </Card>
+              </Pressable>
+
+              <Card style={styles.weather}>
+                <View style={styles.recommendIcon}>
+                  <CloudSun size={19} color={color.accent} strokeWidth={1.8} />
+                </View>
+                <View style={styles.recommendText}>
+                  <Text style={styles.recommendTitle}>Cuaca</Text>
+                  <Text style={styles.recommendBody}>
+                    {reading
+                      ? `${formatTemperature(reading.temperature, settings.temperatureUnit)} · ${weatherLabel(reading.weatherCode)} · kelembapan ${reading.humidity}% · angin ${reading.wind} km/j`
+                      : 'Menghubungkan ke Open-Meteo…'}
+                  </Text>
+                </View>
+              </Card>
+            </>
+          )}
+        </View>
+      </ScrollView>
+
+      {entry ? (
+        <View style={[styles.footer, { paddingBottom: 12 }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Lihat rute ke ${name} di peta`}
+            onPress={() => {
+              selectLocation(slug);
+              router.push('/peta');
+            }}
+            style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+          >
+            <Navigation size={18} color={color.surface} strokeWidth={2} />
+            <Text style={styles.ctaLabel}>Lihat Rute</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
   );
 }
+
+const PLACEHOLDER_POLLUTANTS = [
+  { key: 'pm2_5', label: 'PM2.5', value: 0, unit: 'μg/m³' },
+  { key: 'pm10', label: 'PM10', value: 0, unit: 'μg/m³' },
+  { key: 'o3', label: 'O₃', value: 0, unit: 'μg/m³' },
+  { key: 'no2', label: 'NO₂', value: 0, unit: 'μg/m³' },
+  { key: 'so2', label: 'SO₂', value: 0, unit: 'μg/m³' },
+];
 
 const styles = StyleSheet.create({
   screen: {
@@ -208,154 +198,151 @@ const styles = StyleSheet.create({
     backgroundColor: color.bg,
   },
   content: {
-    paddingBottom: 40,
-  },
-  header: {
-    minHeight: 56,
-    paddingHorizontal: spacing.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  headerText: {
-    flex: 1,
-    gap: 1,
-  },
-  headerTitle: {
-    ...typo.title,
-    color: color.ink,
-  },
-  headerSubtitle: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  sections: {
-    paddingHorizontal: spacing.gutter,
-    gap: spacing.section,
+    paddingBottom: 110,
   },
   hero: {
-    borderRadius: radius.card,
-    overflow: 'hidden',
-    alignItems: 'center',
-    paddingTop: 18,
-    paddingBottom: 16,
-    paddingHorizontal: 12,
+    width: '100%',
+    height: 220,
   },
-  pill: {
-    marginTop: 10,
-  },
-  headline: {
-    ...typo.bodyStrong,
-    color: color.ink,
-    textAlign: 'center',
-    marginTop: 14,
-  },
-  updated: {
-    ...typo.micro,
-    color: color.mutedText,
-    marginTop: 4,
-  },
-  weather: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-    marginTop: 12,
-  },
-  weatherStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  weatherLabel: {
-    ...typo.stat,
-    color: color.ink,
-  },
-  pollutants: {
-    padding: 16,
-    gap: 14,
-  },
-  cardTitle: {
-    ...typo.bodyStrong,
-    color: color.ink,
-  },
-  pollutantRow: {
-    height: 17,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pollutantName: {
-    ...typo.stat,
-    width: 60,
-    color: color.mutedText,
-  },
-  pollutantTrack: {
+  heroOverlay: {
     flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: color.tint,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(21, 60, 112, 0.10)',
   },
-  pollutantFill: {
-    height: 8,
-    borderRadius: 4,
-  },
-  pollutantValue: {
-    ...typo.stat,
-    minWidth: 48,
-    textAlign: 'right',
-    color: color.ink,
-  },
-  mapButton: {
-    height: 44,
-    borderRadius: radius.control,
-    backgroundColor: color.tint,
+  heroActions: {
+    position: 'absolute',
+    left: spacing.gutter,
+    right: spacing.gutter,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    flex: 1,
+    justifyContent: 'space-between',
   },
-  mapButtonLabel: {
-    ...typo.bodyStrong,
-    color: color.accent,
-  },
-  caption: {
-    ...typo.micro,
-    color: color.mutedText,
-  },
-  star: {
-    width: 32,
-    height: 32,
+  circleButton: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: color.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressed: {
-    opacity: 0.65,
+    opacity: 0.7,
   },
-  actions: {
+  sections: {
+    paddingHorizontal: spacing.gutter,
+    marginTop: -22,
+    gap: spacing.section,
+  },
+  titleRow: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
-  primaryButton: {
-    height: 44,
-    flex: 2,
-    borderRadius: radius.control,
+  titleText: {
+    gap: 3,
+  },
+  title: {
+    ...typo.title,
+    fontSize: 22,
+    lineHeight: 27,
+    color: color.ink,
+  },
+  areaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  area: {
+    ...typo.caption,
+    color: color.mutedText,
+  },
+  stats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  ringWrap: {
+    width: 148,
+  },
+  pollutants: {
+    flex: 1,
+    gap: 8,
+  },
+  pollutantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pollutantLabel: {
+    ...typo.body,
+    color: color.mutedText,
+  },
+  pollutantValue: {
+    ...typo.bodyStrong,
+    color: color.ink,
+  },
+  pollutantUnit: {
+    ...typo.caption,
+    color: color.mutedText,
+  },
+  recommend: {
+    flexDirection: 'row',
+    padding: 14,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  weather: {
+    flexDirection: 'row',
+    padding: 14,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  recommendIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: color.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recommendText: {
+    flex: 1,
+    gap: 3,
+  },
+  recommendTitle: {
+    ...typo.bodyStrong,
+    color: color.ink,
+  },
+  recommendBody: {
+    ...typo.caption,
+    color: color.mutedText,
+    lineHeight: 16,
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: spacing.gutter,
+    paddingTop: 10,
+    backgroundColor: color.bg,
+    borderTopWidth: 1,
+    borderTopColor: color.border,
+  },
+  cta: {
+    height: 52,
+    borderRadius: radius.card,
     backgroundColor: color.accent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
   },
-  primaryButtonDone: {
-    backgroundColor: color.tint,
+  ctaPressed: {
+    opacity: 0.85,
   },
-  primaryLabel: {
+  ctaLabel: {
     ...typo.bodyStrong,
-    color: '#ffffff',
-  },
-  primaryLabelDone: {
-    color: color.ink,
+    fontSize: 15,
+    color: color.surface,
   },
 });
