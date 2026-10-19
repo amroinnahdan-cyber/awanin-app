@@ -62,12 +62,52 @@ Catatan URL backend:
 Tanpa variabel itu aplikasi berjalan dalam **direct mode**: semua request ke
 Open-Meteo, push dinonaktifkan, dan tidak ada cache bersama.
 
+### Emulator Android — `Activity class {…HomeActivity} does not exist`
+
+Gejalanya seperti ini di terminal Expo:
+
+```
+› Opening emulator Pixel_9
+› Opening exp://10.90.200.90:8082 on Pixel_9
+CommandError: Activity class {host.exp.exponent/host.exp.exponent.experience.HomeActivity} does not exist.
+```
+
+Ini bukan error kode aplikasi dan bukan error Metro: bundel tidak pernah diminta,
+`adb` sudah gagal lebih dulu saat membuka Expo Go. Artinya paket `host.exp.exponent`
+masih terdaftar di emulator, tetapi APK-nya tidak benar-benar ada/selesai terpasang
+(misalnya sisa snapshot AVD lama, atau unduhan Expo Go 58.0.4 terputus).
+
+1. Pastikan emulator benar-benar selesai boot dan hanya ada satu perangkat:
+   `adb devices`, lalu `adb shell getprop sys.boot_completed` harus `1`.
+2. Cek apa yang terpasang:
+   `adb shell dumpsys package host.exp.exponent | grep -E "versionName|codePath"`
+   (PowerShell: `... | Select-String "versionName|codePath"`).
+   Untuk SDK 58, versi yang benar adalah **58.0.4**.
+3. Hapus paketnya, lalu biarkan Expo CLI memasang ulang:
+   ```bash
+   adb uninstall host.exp.exponent
+   npx expo start --clear      # lalu tekan a
+   ```
+   CLI akan mengunduh Expo Go 58.0.4 (~226 MB) dan memasangnya sendiri. Expo Go
+   yang sama juga dipakai di HP fisik, jadi unduhan ini hanya sekali.
+4. Kalau langkah 3 masih gagal, pasang manual:
+   [Expo-Go-58.0.4.apk](https://github.com/expo/expo-go-releases/releases/download/Expo-Go-58.0.4/Expo-Go-58.0.4.apk)
+   ```bash
+   adb install -r Expo-Go-58.0.4.apk
+   ```
+5. Kalau tetap: **Wipe Data** AVD (Device Manager → ⋮ → Wipe Data) atau cold boot
+   `emulator -avd Pixel_9 -no-snapshot-load`, lalu ulangi langkah 3.
+
+Catatan: Expo Go di Play Store saat ini masih SDK 57, jadi untuk proyek SDK 58 ini
+CLI akan menawarkan (dan sebaiknya diizinkan) menggantinya dengan Expo Go 58.0.4.
+Tanpa emulator, `npx expo start --web` atau scan QR dengan Expo Go di HP juga bisa.
+
 ### Pemeriksaan
 
 ```bash
 npm run lint         # eslint .
 npm run typecheck    # tsc --noEmit
-npm test             # jest (17 tes)
+npm test             # jest (20 tes)
 npm run check        # ketiganya sekaligus
 
 cd server
@@ -291,6 +331,15 @@ AsyncStorage/localStorage (`src/lib/persist.ts`).
 anonim + token Expo ke backend, menyinkronkan preferensi (lokasi, ambang, jam tenang),
 dan membaca riwayat notifikasi server. Server yang memutuskan kapan mengirim, jadi
 alert tetap datang walau aplikasi tertutup (butuh development build, bukan Expo Go).
+
+**Expo Go di Android** tidak membawa `ExpoTopicSubscriptionModule` (push jarak jauh
+dihapus dari Expo Go sejak SDK 53), padahal `expo-notifications` me-resolve modul itu
+saat index-nya dievaluasi. Karena itu [`src/lib/push.ts`](src/lib/push.ts) sengaja
+**tidak menyentuh paket tersebut sama sekali** saat `isRunningInExpoGo()` bernilai
+true di Android — `try { require(...) } catch {}` tidak menolong di sini, sebab Metro
+melaporkan kegagalan evaluasi modul lewat `ErrorUtils.reportFatalError` (tanpa
+melempar ulang), sehingga RedBox muncul walau ada `catch`. Di runtime itu push
+dilaporkan `unsupported` dengan alasan yang bisa dibaca pengguna.
 
 Pengaturan di layar Notifikasi mengendalikan keduanya: **Peringatan Kualitas Udara**
 (sakelar induk), **Peringatan AQI Tinggi** (feed perubahan kategori), **Tips Kesehatan**

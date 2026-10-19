@@ -1,32 +1,52 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import { isRunningInExpoGo } from 'expo';
 import { Platform } from 'react-native';
 
 type NotificationsModule = typeof import('expo-notifications');
 
 /**
- * `expo-notifications` resolves a native module (`ExpoTopicSubscriptionModule`,
- * among others) at import time. On runtimes that ship a mismatched binary — for
- * example Expo Go 58.0.4 while the package is 58.1.5 — that import throws
- * "Cannot find native module", and because it happened at module-load the whole
- * app crashed before the first frame.
+ * Expo Go on Android does not ship `ExpoTopicSubscriptionModule` (remote push was
+ * removed from Expo Go in SDK 53), yet `expo-notifications` resolves that native
+ * module while its own index is being evaluated. That makes a plain
+ * `import 'expo-notifications'` — and even a `require` wrapped in `try/catch` —
+ * fatal: Metro loads modules through `guardedLoadModule`, which reports the
+ * failure with `ErrorUtils.reportFatalError` and never rethrows, so the `catch`
+ * block is skipped and the red error screen appears anyway.
  *
- * Loading the module lazily keeps that failure contained: the app boots, and
- * push simply reports itself unavailable with a readable reason instead of a
- * blank screen. The result is cached so we only pay the require once.
+ * The only reliable fix is to never touch the package when the native module is
+ * known to be absent. Everything else (web, iOS Expo Go, dev builds, release
+ * builds) keeps the previous behaviour: the module is loaded lazily, and a
+ * mismatched binary still degrades to "push unavailable" instead of a crash.
  */
+let expoGoAndroid: boolean | null = null;
+
+function isExpoGoOnAndroid(): boolean {
+  if (expoGoAndroid !== null) return expoGoAndroid;
+  try {
+    expoGoAndroid = Platform.OS === 'android' && isRunningInExpoGo();
+  } catch {
+    expoGoAndroid = false;
+  }
+  return expoGoAndroid;
+}
+
 let cachedModule: NotificationsModule | null = null;
 
 function loadNotifications(): NotificationsModule | null {
   if (cachedModule) return cachedModule;
+  if (isExpoGoOnAndroid()) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    cachedModule = require('expo-notifications') as NotificationsModule;
+    cachedModule = (require('expo-notifications') as NotificationsModule) ?? null;
   } catch {
     cachedModule = null;
   }
   return cachedModule;
 }
+
+const EXPO_GO_REASON =
+  'Push jarak jauh tidak tersedia di Expo Go pada Android (dihapus sejak SDK 53). Notifikasi di dalam aplikasi tetap berjalan; pakai development build untuk push.';
 
 const UNAVAILABLE =
   'Notifikasi native tidak tersedia di runtime ini (modul push tidak ditemukan).';
@@ -80,6 +100,10 @@ export async function registerForPush(): Promise<PushRegistration> {
       supported: false,
       reason: 'Push jarak jauh belum didukung di web. Notifikasi dalam aplikasi tetap aktif.',
     };
+  }
+
+  if (isExpoGoOnAndroid()) {
+    return { token: null, supported: false, reason: EXPO_GO_REASON };
   }
 
   const notifications = loadNotifications();
@@ -151,15 +175,21 @@ export function attachNotificationNavigation(
 ): () => void {
   const notifications = loadNotifications();
   if (!notifications) return () => {};
-  installNotificationHandler(notifications);
 
-  const subscription = notifications.addNotificationResponseReceivedListener(
-    (response) => {
-      const data = response.notification.request.content.data as
-        | { slug?: unknown }
-        | undefined;
-      if (data && typeof data.slug === 'string') onOpen(data.slug);
-    },
-  );
-  return () => subscription.remove();
+  try {
+    installNotificationHandler(notifications);
+    const subscription = notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data as
+          | { slug?: unknown }
+          | undefined;
+        if (data && typeof data.slug === 'string') onOpen(data.slug);
+      },
+    );
+    return () => subscription.remove();
+  } catch {
+    // A runtime without the notification native module must never take the
+    // layout down with it.
+    return () => {};
+  }
 }
