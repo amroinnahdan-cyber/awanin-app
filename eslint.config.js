@@ -6,6 +6,6 @@ module.exports = defineConfig([
   expoConfig,
   {
     // .expo holds generated route types; they are not hand-written source.
-    ignores: ['dist/*', '.expo/*'],
+    ignores: ['dist/*', '.expo/*', 'server/**'],
   },
 ]);

@@ -163,15 +163,57 @@ kawasan. Untuk kebutuhan desain, mock data juga diperbolehkan sesuai ketentuan t
 Sesuai ketentuan tugas, implementasi kode memang **belum diwajibkan**. Namun sebagai
 pengembangan lanjutan, desain Awanin sudah diimplementasikan menjadi aplikasi mobile
 nyata menggunakan **React Native + Expo (Expo Router)** dengan 8 layar yang seluruhnya
-mengikuti desain Figma, plus integrasi langsung ke Open-Meteo API (data real, bukan
-mock). Kode aplikasi tersedia pada repositori ini (`awanin-app`).
+mengikuti desain Figma, plus integrasi ke Open-Meteo API (data real, bukan mock) melalui
+**backend sendiri**. Kode aplikasi dan backend tersedia pada repositori ini
+(`awanin-app/` dan `awanin-app/server/`).
 
-Cara menjalankan:
+### 8.1 Arsitektur
+
+```
+Aplikasi Expo  ──JSON/HTTPS──▶  awanin-server (Express + SQLite)
+    │                                │
+    │ fallback langsung              │  cache 10 menit + scheduler 15 menit
+    ▼                                ▼
+Open-Meteo Air Quality & Weather API (tanpa API key)
+```
+
+- **Aplikasi** — 8 layar, navigasi Expo Router, tema & komponen konsisten dengan
+  Figma. Sumber data dipilih berurutan: backend → Open-Meteo langsung → cache
+  perangkat (ditandai *stale*), sehingga aplikasi tetap berguna saat offline.
+- **Backend** (`server/`) — Node 22 + Express 4 + SQLite bawaan (`node:sqlite`).
+  Mem-proxy dan meng-cache Open-Meteo (snapshot 10 menit, riwayat 15 menit),
+  menyimpan riwayat pembacaan per lokasi, dan mengirim push notification Expo saat
+  kategori AQI berubah. Validasi zod, helmet, CORS allow-list, rate limit, serta
+  dokumentasi OpenAPI di `/docs` dan `/openapi.json`.
+- **Push** — perangkat mendaftarkan `deviceId` anonim + token Expo. Scheduler
+  memeriksa ambang AQI, jam tenang (22:00–06:00 WIB), cooldown 180 menit, dan hanya
+  mengirim saat kategori berubah — bukan setiap polling.
+- **Database** — tabel `devices`, `preferences`, `notifications`, `readings`,
+  `api_cache`; skema dibuat idempoten saat boot, tanpa migration tool terpisah.
+
+### 8.2 Menjalankan
 
 ```bash
-npm install
-npx expo start   # lalu tekan w / a / i, atau scan dengan Expo Go
+# Backend
+cd server && npm install && npm run dev     # http://localhost:4000/docs
+
+# Aplikasi (terminal lain)
+cd awanin-app && npm install
+cp .env.example .env    # EXPO_PUBLIC_API_URL=http://localhost:4000
+npx expo start          # tekan w / a / i, atau scan dengan Expo Go
 ```
+
+Pemeriksaan: `npm run lint`, `npm run typecheck`, `npm test` (aplikasi) dan
+`npm run typecheck`, `npm test` (backend). CI menjalankan semuanya pada setiap push.
+
+### 8.3 Yang bisa didemokan
+
+1. Beranda menampilkan AQI nyata + prakiraan lima hari dan cuaca dari backend.
+2. Peta membandingkan Monas, Bundaran HI, GBK, dan Kota Tua; ketuk marker → Detail.
+3. Riwayat 7/30 hari dengan grafik dan statistik dari tabel `readings`.
+4. Notifikasi: ubah preferensi, kirim push uji (di development build), lihat riwayat.
+5. Matikan backend → aplikasi otomatis memakai Open-Meteo langsung, lalu cache
+   perangkat; UI menandai data tersimpan alih-alih menampilkan error.
 
 ---
 

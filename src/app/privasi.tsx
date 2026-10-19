@@ -1,18 +1,20 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen';
 import { LinkRow } from '@/components/LinkRow';
 import { ATTRIBUTION } from '@/api/openMeteo';
-import { color, type as typo } from '@/theme/tokens';
+import { useThemedStyles } from '@/theme/ThemeProvider';
+import { type as typo, type ThemeColors } from '@/theme/tokens';
 
 const POINTS = [
-  'Tidak ada akun, login, atau token di aplikasi ini.',
+  'Tidak ada akun, login, atau kata sandi.',
   'Tidak ada analitik, iklan, maupun SDK pelacak pihak ketiga.',
-  'Lokasi yang kamu pilih disimpan di memori sesi, bukan dikirim ke server mana pun.',
-  'Tidak ada izin GPS yang diminta: titik-titik yang dipantau sudah ditentukan.',
+  'ID perangkat bersifat anonim dan dibuat acak di perangkat.',
+  'GPS dan notifikasi hanya diminta bila kamu menekan tombolnya; keduanya bisa dilewati.',
 ];
 
 export default function PrivasiScreen() {
+  const styles = useThemedStyles(createStyles);
   return (
     <InfoScreen title="Privasi & keamanan" subtitle="Apa yang disimpan, dan apa yang tidak">
       <InfoSection title="Ringkasnya" delay={0}>
@@ -26,24 +28,28 @@ export default function PrivasiScreen() {
 
       <InfoSection title="Data yang keluar dari perangkat" delay={60}>
         <InfoParagraph>
-          Hanya permintaan cuaca dan kualitas udara ke Open-Meteo dengan koordinat lokasi yang kamu
-          pilih. Tidak ada identitas pengguna yang ikut terkirim.
+          Koordinat lokasi yang kamu pilih dikirim ke Open-Meteo untuk membaca cuaca dan kualitas
+          udara. Bila backend Awanin aktif, koordinat dan ID perangkat anonim juga dipakai untuk
+          cache server serta langganan peringatan — tanpa nama, email, atau identitas lain.
         </InfoParagraph>
         <InfoParagraph>{ATTRIBUTION}.</InfoParagraph>
       </InfoSection>
 
       <InfoSection title="Masa simpan" delay={120}>
         <InfoParagraph>
-          Pilihan lokasi, favorit, dan pengaturan hidup selama aplikasi berjalan. Menutup aplikasi
-          atau memuat ulang halaman mengembalikannya ke keadaan awal — karena itu layar Profil →
-          Keluar tidak menghapus apa pun di server.
+          Di perangkat: pilihan lokasi, favorit, preferensi tema, pembacaan terakhir, dan riwayat
+          notifikasi disimpan di AsyncStorage/localStorage. Riwayat notifikasi dibatasi 20 entri.
+        </InfoParagraph>
+        <InfoParagraph>
+          Di server: baris perangkat, preferensi peringatan, dan log notifikasi. Menekan
+          “Keluar” di Profil menghapus baris perangkat beserta preferensinya dari server.
         </InfoParagraph>
       </InfoSection>
 
       <InfoSection title="Izin" delay={180}>
         <InfoParagraph>
-          Awanin tidak meminta izin notifikasi, kamera, mikrofon, maupun kontak. Notifikasi di
-          dalam aplikasi hanyalah daftar perubahan yang tercatat selama sesi berjalan.
+          Notifikasi (opsional): untuk peringatan AQI dari server. Lokasi (opsional): untuk
+          “Gunakan lokasi saya”. Tidak ada akses kamera, mikrofon, atau kontak.
         </InfoParagraph>
       </InfoSection>
 
@@ -55,21 +61,23 @@ export default function PrivasiScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  point: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  bullet: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: color.accent,
-    marginTop: 7,
-  },
-  pointText: {
-    ...typo.body,
-    flex: 1,
-    color: color.mutedText,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    point: {
+      flexDirection: 'row' as const,
+      gap: 8,
+    },
+    bullet: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: colors.accent,
+      marginTop: 7,
+    },
+    pointText: {
+      ...typo.body,
+      flex: 1,
+      color: colors.mutedText,
+    },
+  };
+}

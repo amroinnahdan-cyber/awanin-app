@@ -1,13 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
@@ -16,12 +8,13 @@ import { Check, ChevronRight, MapPin, Navigation, Search } from 'lucide-react-na
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { LocationSheet } from '@/components/LocationSheet';
 import { Chip } from '@/components/ui';
-import { useLocationDirectory } from '@/hooks/useAirQuality';
+import { useLocationDirectory, useSelectedAir } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor } from '@/lib/aqi';
+import { categoryFor, readableOn } from '@/lib/aqi';
 import { placeImage } from '@/lib/placeImages';
 import { HOME_LOCATION, selectLocation, useAppState } from '@/state/app';
-import { color, font, radius, shadow, spacing, type as typo } from '@/theme/tokens';
+import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
+import { font, radius, shadow, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
 /**
  * Green cover rectangles, labels and marker positions are taken verbatim from
@@ -74,7 +67,10 @@ const slugFor = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
 
 export default function PetaScreen() {
   const topInset = useTopInset();
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const directory = useLocationDirectory();
+  const air = useSelectedAir();
   const { selected } = useAppState();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('semua');
@@ -86,7 +82,7 @@ export default function PetaScreen() {
   }, [directory.data]);
 
   const aqiFor = (name: string) => aqiBySlug.get(slugFor(name));
-  const selectedAqi = aqiBySlug.get(selected.slug);
+  const selectedAqi = aqiBySlug.get(selected.slug) ?? air.data?.aqi;
   const selectedCategory = selectedAqi === undefined ? null : categoryFor(selectedAqi);
 
   return (
@@ -113,14 +109,14 @@ export default function PetaScreen() {
           {/* River — drawn first so roads bridge over it */}
           <Path
             d="M 212 740 C 200 640 238 575 228 500 C 218 425 252 360 244 288 C 236 220 258 140 252 -20"
-            stroke={color.river}
+            stroke={colors.river}
             strokeWidth={12}
             fill="none"
             strokeLinecap="round"
           />
           <Path
             d="M 228 500 C 190 488 160 470 142 442"
-            stroke={color.river}
+            stroke={colors.river}
             strokeWidth={5}
             fill="none"
             strokeLinecap="round"
@@ -128,38 +124,38 @@ export default function PetaScreen() {
           {/* Arterials */}
           <Path
             d="M -20 530 C 40 480 66 436 76 392 C 90 330 96 286 100 238 C 106 176 112 96 120 -20"
-            stroke="#ffffff"
+            stroke={colors.road}
             strokeWidth={12}
             fill="none"
             strokeLinecap="round"
           />
           <Path
             d="M -20 300 C 55 292 92 276 128 258 C 198 224 242 318 262 398 C 272 436 280 452 288 468 C 312 522 348 602 410 652"
-            stroke="#ffffff"
+            stroke={colors.road}
             strokeWidth={12}
             fill="none"
             strokeLinecap="round"
           />
           <Path
             d="M 390 108 C 338 118 302 146 278 182 C 252 220 198 236 148 242"
-            stroke="#ffffff"
+            stroke={colors.road}
             strokeWidth={8}
             fill="none"
             strokeLinecap="round"
           />
           {/* Secondary streets */}
-          <Path d="M 8 92 C 90 80 170 72 260 78 C 310 82 350 92 386 106" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 4 166 C 70 152 148 142 226 148 C 288 152 340 166 388 184" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M -6 348 C 60 336 132 330 196 342 C 252 352 316 372 392 382" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M -4 438 C 72 424 150 418 214 432 C 268 444 330 468 392 478" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 6 596 C 92 578 176 566 252 574 C 312 580 356 596 388 614" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 30 12 C 52 140 70 286 78 420 C 84 530 84 640 74 716" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 166 8 C 176 120 180 240 172 356 C 166 470 172 602 188 716" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 306 4 C 312 118 306 236 296 344 C 288 452 298 596 322 714" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 358 60 C 350 180 346 320 352 448 C 356 540 368 626 382 700" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 12 668 C 110 646 210 638 300 652" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 226 236 C 258 262 292 278 330 284" stroke="#ffffff" strokeWidth={4} fill="none" />
-          <Path d="M 96 486 C 132 502 158 526 174 558" stroke="#ffffff" strokeWidth={4} fill="none" />
+          <Path d="M 8 92 C 90 80 170 72 260 78 C 310 82 350 92 386 106" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 4 166 C 70 152 148 142 226 148 C 288 152 340 166 388 184" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M -6 348 C 60 336 132 330 196 342 C 252 352 316 372 392 382" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M -4 438 C 72 424 150 418 214 432 C 268 444 330 468 392 478" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 6 596 C 92 578 176 566 252 574 C 312 580 356 596 388 614" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 30 12 C 52 140 70 286 78 420 C 84 530 84 640 74 716" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 166 8 C 176 120 180 240 172 356 C 166 470 172 602 188 716" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 306 4 C 312 118 306 236 296 344 C 288 452 298 596 322 714" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 358 60 C 350 180 346 320 352 448 C 356 540 368 626 382 700" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 12 668 C 110 646 210 638 300 652" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 226 236 C 258 262 292 278 330 284" stroke={colors.road} strokeWidth={4} fill="none" />
+          <Path d="M 96 486 C 132 502 158 526 174 558" stroke={colors.road} strokeWidth={4} fill="none" />
         </Svg>
 
         {PARKS.map((park, index) => (
@@ -211,14 +207,21 @@ export default function PetaScreen() {
               <View
                 style={[
                   styles.markerDot,
-                  { backgroundColor: category?.color ?? color.track },
+                  { backgroundColor: category?.color ?? colors.track },
                   isSelected && styles.markerDotSelected,
                 ]}
               >
                 {isSelected ? (
-                  <Check size={18} color={color.surface} strokeWidth={2.6} />
+                  <Check size={18} color={readableOn(category?.color ?? colors.track)} strokeWidth={2.6} />
                 ) : (
-                  <Text style={styles.markerValue}>{aqi ?? ''}</Text>
+                  <Text
+                    style={[
+                      styles.markerValue,
+                      { color: readableOn(category?.color ?? colors.track) },
+                    ]}
+                  >
+                    {aqi ?? ''}
+                  </Text>
                 )}
               </View>
               <Text style={[styles.markerLabel, isSelected && styles.markerLabelSelected]}>
@@ -234,7 +237,7 @@ export default function PetaScreen() {
           onPress={() => setPickerOpen(true)}
           style={({ pressed }) => [styles.search, pressed && styles.pressed]}
         >
-          <Search size={20} color={color.muted} strokeWidth={1.8} />
+          <Search size={20} color={colors.muted} strokeWidth={1.8} />
           <Text style={styles.searchLabel}>Cari lokasi...</Text>
         </Pressable>
 
@@ -255,7 +258,7 @@ export default function PetaScreen() {
           onPress={() => selectLocation(HOME_LOCATION.slug)}
           style={({ pressed }) => [styles.recenter, pressed && styles.pressed]}
         >
-          <Navigation size={23} color={color.accent} strokeWidth={1.8} />
+          <Navigation size={23} color={colors.accent} strokeWidth={1.8} />
         </Pressable>
 
         <Pressable
@@ -269,14 +272,19 @@ export default function PetaScreen() {
           {placeImage(selected.slug) ? (
             <Image source={placeImage(selected.slug) as number} style={styles.previewPhoto} />
           ) : (
-            <LinearGradient colors={[color.sky, color.tint]} style={styles.previewPhoto}>
-              <MapPin size={20} color={color.accent} strokeWidth={1.8} />
+            <LinearGradient colors={[colors.sky, colors.tint]} style={styles.previewPhoto}>
+              <MapPin size={20} color={colors.accent} strokeWidth={1.8} />
             </LinearGradient>
           )}
           <View style={styles.previewInfo}>
             <Text style={styles.previewTitle}>{selected.name}</Text>
             <Text style={styles.previewSubtitle}>{selected.area}</Text>
-            <Text style={[styles.previewAqi, { color: selectedCategory?.color ?? color.mutedText }]}>
+            <Text
+              style={[
+                styles.previewAqi,
+                { color: selectedCategory?.color ?? colors.mutedText },
+              ]}
+            >
               {selectedCategory
                 ? `AQI ${selectedAqi} · ${selectedCategory.label}`
                 : directory.error
@@ -293,7 +301,7 @@ export default function PetaScreen() {
               Coba lagi
             </Text>
           ) : (
-            <ChevronRight size={21} color={color.muted} strokeWidth={1.8} />
+            <ChevronRight size={21} color={colors.muted} strokeWidth={1.8} />
           )}
         </Pressable>
       </View>
@@ -303,150 +311,151 @@ export default function PetaScreen() {
   );
 }
 
-const styles = {
-  screen: {
-    flex: 1,
-    backgroundColor: color.bg,
-  },
-  map: {
-    flex: 1,
-    backgroundColor: color.mapBg,
-    overflow: 'hidden',
-  },
-  park: {
-    position: 'absolute',
-    backgroundColor: color.park,
-    borderRadius: 12,
-  },
-  city: {
-    position: 'absolute',
-    left: '39.74%',
-    top: '45.26%',
-    fontFamily: font.bold,
-    fontSize: 20,
-    lineHeight: 29,
-    color: color.mapLabel,
-  },
-  district: {
-    position: 'absolute',
-    fontFamily: font.regular,
-    fontSize: 10,
-    lineHeight: 14,
-    color: color.areaLabel,
-  },
-  marker: {
-    position: 'absolute',
-    alignItems: 'center',
-    gap: 5,
-  },
-  markerDot: {
-    width: 43,
-    height: 43,
-    borderRadius: radius.pill,
-    borderWidth: 3,
-    borderColor: color.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadow,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  markerDotSelected: {
-    borderColor: color.accent,
-    borderWidth: 3,
-  },
-  markerValue: {
-    ...typo.bodyStrong,
-    color: color.surface,
-  },
-  markerLabelSelected: {
-    color: color.accent,
-  },
-  markerLabel: {
-    fontFamily: font.bold,
-    fontSize: 11,
-    lineHeight: 15,
-    color: color.ink,
-  },
-  search: {
-    position: 'absolute',
-    left: spacing.gutter,
-    top: 13,
-    width: 350,
-    height: 46,
-    borderRadius: radius.control,
-    backgroundColor: color.surface,
-    paddingHorizontal: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    ...shadow,
-  },
-  searchLabel: {
-    ...typo.body,
-    color: color.muted,
-  },
-  filterRow: {
-    position: 'absolute',
-    left: spacing.gutter,
-    top: 67,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  recenter: {
-    position: 'absolute',
-    left: '83.59%',
-    top: '75.21%',
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: color.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadow,
-  },
-  previewPressed: {
-    opacity: 0.85,
-  },
-  retry: {
-    ...typo.caption,
-    color: color.accent,
-  },
-  preview: {
-    position: 'absolute',
-    left: spacing.gutter,
-    top: '83.57%',
-    width: 350,
-    height: 88,
-    borderRadius: radius.card,
-    backgroundColor: color.surface,
-    paddingHorizontal: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    ...shadow,
-  },
-  previewPhoto: {
-    width: 54,
-    height: 54,
-    borderRadius: radius.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  previewTitle: {
-    ...typo.heading,
-    color: color.ink,
-  },
-  previewSubtitle: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  previewAqi: {
-    ...typo.bodyStrong,
-  },
-} satisfies Record<string, ViewStyle | TextStyle>;
+function createStyles(colors: ThemeColors) {
+  return {
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    map: {
+      flex: 1,
+      backgroundColor: colors.mapBg,
+      overflow: 'hidden' as const,
+    },
+    park: {
+      position: 'absolute' as const,
+      backgroundColor: colors.park,
+      borderRadius: 12,
+    },
+    city: {
+      position: 'absolute' as const,
+      left: '39.74%',
+      top: '45.26%',
+      fontFamily: font.bold,
+      fontSize: 20,
+      lineHeight: 29,
+      color: colors.mapLabel,
+    },
+    district: {
+      position: 'absolute' as const,
+      fontFamily: font.regular,
+      fontSize: 10,
+      lineHeight: 14,
+      color: colors.areaLabel,
+    },
+    marker: {
+      position: 'absolute' as const,
+      alignItems: 'center' as const,
+      gap: 5,
+    },
+    markerDot: {
+      width: 43,
+      height: 43,
+      borderRadius: radius.pill,
+      borderWidth: 3,
+      borderColor: colors.surface,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      ...shadow,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    markerDotSelected: {
+      borderColor: colors.accent,
+      borderWidth: 3,
+    },
+    markerValue: {
+      ...typo.bodyStrong,
+    },
+    markerLabelSelected: {
+      color: colors.accent,
+    },
+    markerLabel: {
+      fontFamily: font.bold,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.ink,
+    },
+    search: {
+      position: 'absolute' as const,
+      left: spacing.gutter,
+      top: 13,
+      width: 350,
+      height: 46,
+      borderRadius: radius.control,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 13,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 10,
+      ...shadow,
+    },
+    searchLabel: {
+      ...typo.body,
+      color: colors.muted,
+    },
+    filterRow: {
+      position: 'absolute' as const,
+      left: spacing.gutter,
+      top: 67,
+      flexDirection: 'row' as const,
+      gap: 8,
+    },
+    recenter: {
+      position: 'absolute' as const,
+      left: '83.59%',
+      top: '75.21%',
+      width: 44,
+      height: 44,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surface,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      ...shadow,
+    },
+    previewPressed: {
+      opacity: 0.85,
+    },
+    retry: {
+      ...typo.caption,
+      color: colors.accent,
+    },
+    preview: {
+      position: 'absolute' as const,
+      left: spacing.gutter,
+      top: '83.57%',
+      width: 350,
+      height: 88,
+      borderRadius: radius.card,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 15,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      ...shadow,
+    },
+    previewPhoto: {
+      width: 54,
+      height: 54,
+      borderRadius: radius.control,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    previewInfo: {
+      flex: 1,
+      gap: 3,
+    },
+    previewTitle: {
+      ...typo.heading,
+      color: colors.ink,
+    },
+    previewSubtitle: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    previewAqi: {
+      ...typo.bodyStrong,
+    },
+  };
+}

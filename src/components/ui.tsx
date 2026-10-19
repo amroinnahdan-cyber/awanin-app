@@ -7,14 +7,18 @@ import {
   Text,
   View,
   type DimensionValue,
+  type ImageStyle,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import { CloudOff } from 'lucide-react-native';
 
 import { AQI_CATEGORIES, AQI_SCALE_MAX, categoryFor } from '@/lib/aqi';
-import { color, font, radius, shadow, spacing, type as typo } from '@/theme/tokens';
+import { relativeTime } from '@/lib/format';
+import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
+import { font, radius, shadow, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
 /**
  * Loading placeholder: a soft pulsing block. Used instead of dashes so a slow
@@ -32,6 +36,7 @@ export function Skeleton({
   style?: StyleProp<ViewStyle>;
 }) {
   const [pulse] = useState(() => new Animated.Value(0.5));
+  const { colors } = useTheme();
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -57,7 +62,7 @@ export function Skeleton({
   return (
     <Animated.View
       style={[
-        { width, height, borderRadius: corner, backgroundColor: color.track, opacity: pulse },
+        { width, height, borderRadius: corner, backgroundColor: colors.track, opacity: pulse },
         style,
       ]}
     />
@@ -70,6 +75,7 @@ export function Skeleton({
  * the scale looks like, which is the part a single number hides.
  */
 export function AqiLegend({ value, style }: { value?: number; style?: StyleProp<ViewStyle> }) {
+  const styles = useThemedStyles(createStyles);
   const ratio =
     value === undefined ? null : Math.min(Math.max(value, 0), AQI_SCALE_MAX) / AQI_SCALE_MAX;
   const ticks = [
@@ -133,6 +139,7 @@ type CardProps = {
 
 /** radius 18 + shared drop shadow from the file. */
 export function Card({ children, tone = 'surface', style }: CardProps) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.card, tone === 'tint' ? styles.cardTint : styles.cardSurface, style]}>
       {children}
@@ -148,6 +155,7 @@ type SectionTitleProps = {
 
 /** "Lokasi Populer" + "Lihat semua" row — 350 wide, space-between. */
 export function SectionTitle({ title, action, onAction }: SectionTitleProps) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.sectionTitle}>
       <Text style={styles.sectionHeading}>{title}</Text>
@@ -165,7 +173,7 @@ export function SectionTitle({ title, action, onAction }: SectionTitleProps) {
   );
 }
 
-/** Active pill: accent on white text. Inactive: transparent with muted label. */
+/** Active pill: accent on `onAccent` text. Inactive: transparent with muted label. */
 export function Chip({
   label,
   active,
@@ -175,6 +183,7 @@ export function Chip({
   active: boolean;
   onPress?: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable
       accessibilityRole="tab"
@@ -189,19 +198,21 @@ export function Chip({
   );
 }
 
-/** 1px #e5edf8 separator used inside the profile lists. */
+/** 1px separator used inside the profile lists. */
 export function Divider() {
+  const styles = useThemedStyles(createStyles);
   return <View style={styles.divider} />;
 }
 
 /**
- * The soft off-white glow the hero is built around: in the export it is a flat
- * #fcfcff core (x 130..265 of the 390px card) with a ~20px soft edge, running
+ * The soft glow the hero is built around: a flat core with a soft edge running
  * from just above the ring's centre down past the card's bottom, which is why
- * the gauge reads as a lit dial and the copy below sits on white rather than on
- * sky. Percentage geometry, so it keeps its shape when the hero grows.
+ * the gauge reads as a lit dial. Percentages, so it holds its shape when the
+ * hero grows. The core follows the palette (off-white in light, a lifted navy
+ * in dark) so the glow never turns into a white rectangle on dark surfaces.
  */
 export function HeroGlow() {
+  const { colors } = useTheme();
   // Gradient ids are document-global on web, so keep them unique per instance.
   const id = `hero-glow-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
@@ -213,10 +224,10 @@ export function HeroGlow() {
     >
       <Defs>
         <RadialGradient id={id} cx="0.5" cy="0.5" r="0.5">
-          <Stop offset="0" stopColor="#fcfcff" stopOpacity="1" />
-          <Stop offset="0.7" stopColor="#fcfcff" stopOpacity="1" />
-          <Stop offset="0.88" stopColor="#fcfcff" stopOpacity="0.5" />
-          <Stop offset="1" stopColor="#fcfcff" stopOpacity="0" />
+          <Stop offset="0" stopColor={colors.glow} stopOpacity="1" />
+          <Stop offset="0.7" stopColor={colors.glow} stopOpacity="1" />
+          <Stop offset="0.88" stopColor={colors.glow} stopOpacity="0.5" />
+          <Stop offset="1" stopColor={colors.glow} stopOpacity="0" />
         </RadialGradient>
       </Defs>
       <Ellipse cx={50} cy={62} rx={25} ry={58} fill={`url(#${id})`} />
@@ -240,6 +251,7 @@ export function CategoryPill({
   textTone: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.pill, { backgroundColor: tone }, style]}>
       <Text style={[styles.pillLabel, { color: textTone }]} numberOfLines={1}>
@@ -250,10 +262,11 @@ export function CategoryPill({
 }
 
 /**
- * Honest failure state — shown instead of inventing readings when the
- * Open-Meteo request fails.
+ * Honest failure state — shown instead of inventing readings when the request
+ * fails and no cached snapshot exists.
  */
 export function InlineError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.error}>
       <Text style={styles.errorText}>Data belum bisa dimuat: {message}</Text>
@@ -266,138 +279,170 @@ export function InlineError({ message, onRetry }: { message: string; onRetry?: (
   );
 }
 
-const styles = {
-  card: {
-    borderRadius: radius.card,
-    ...shadow,
-  },
-  cardSurface: {
-    backgroundColor: color.surface,
-  },
-  cardTint: {
-    backgroundColor: color.tint,
-  },
-  sectionTitle: {
-    minHeight: 21,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionHeading: {
-    ...typo.heading,
-    color: color.ink,
-  },
-  sectionAction: {
-    ...typo.action,
-    color: color.accent,
-  },
-  chip: {
-    flex: 1,
-    height: 34,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  chipActive: {
-    backgroundColor: color.accent,
-  },
-  chipIdle: {
-    backgroundColor: 'transparent',
-  },
-  chipLabel: {
-    fontSize: 12,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
-  chipLabelActive: {
-    color: color.surface,
-    fontFamily: font.bold,
-  },
-  chipLabelIdle: {
-    color: color.mutedText,
-    fontFamily: font.regular,
-  },
-  divider: {
-    height: 1,
-    width: '100%',
-    backgroundColor: color.border,
-  },
-  scale: {
-    gap: 7,
-  },
-  scaleHead: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  scaleTitle: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  scaleValue: {
-    ...typo.caption,
-    fontFamily: font.bold,
-    color: color.ink,
-  },
-  scaleBar: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    backgroundColor: color.track,
-  },
-  scaleMarker: {
-    position: 'absolute',
-    top: -4,
-    width: 3,
-    height: 16,
-    marginLeft: -1.5,
-    borderRadius: 2,
-    backgroundColor: color.ink,
-  },
-  scaleTicks: {
-    height: 14,
-  },
-  scaleTick: {
-    position: 'absolute',
-    ...typo.micro,
-    color: color.mutedText,
-    marginLeft: -6,
-  },
-  scaleTickEnd: {
-    marginLeft: -18,
-  },
-  pill: {
-    borderRadius: radius.pill,
-    // 10 + bold 12 keeps the widest label ("Tidak Sehat untuk Sensitif", 154px
-    // of text) at 174px, i.e. exactly the ring's outer width, so the chip never
-    // overhangs the gauge it labels.
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    maxWidth: '100%',
-  },
-  pillLabel: {
-    fontFamily: font.bold,
-    fontSize: 12,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
-  error: {
-    minHeight: 60,
-    borderRadius: radius.card,
-    backgroundColor: color.tint,
-    borderWidth: 1,
-    borderColor: color.border,
-    padding: spacing.gutter,
-    gap: 6,
-  },
-  errorText: {
-    ...typo.body,
-    color: color.ink,
-  },
-  errorRetry: {
-    ...typo.bodyStrong,
-    color: color.accent,
-  },
-} satisfies Record<string, ViewStyle | TextStyle>;
+/**
+ * Shown above a reading that came from the on-device (or server) cache because
+ * the network request failed. The timestamp is the point: a stale number with
+ * its age is useful, a stale number presented as live is not.
+ */
+export function StaleBadge({ cachedAt }: { cachedAt?: string }) {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
+  return (
+    <View style={styles.stale} accessibilityRole="alert">
+      <CloudOff size={14} color={colors.mutedText} strokeWidth={1.8} />
+      <Text style={styles.staleText}>
+        {cachedAt ? `Data tersimpan · ${relativeTime(cachedAt)}` : 'Data tersimpan'}
+      </Text>
+    </View>
+  );
+}
+
+function createStyles(colors: ThemeColors) {
+  return {
+    card: {
+      borderRadius: radius.card,
+      ...shadow,
+    },
+    cardSurface: {
+      backgroundColor: colors.surface,
+    },
+    cardTint: {
+      backgroundColor: colors.tint,
+    },
+    sectionTitle: {
+      minHeight: 21,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'space-between' as const,
+    },
+    sectionHeading: {
+      ...typo.heading,
+      color: colors.ink,
+    },
+    sectionAction: {
+      ...typo.action,
+      color: colors.accent,
+    },
+    chip: {
+      flex: 1,
+      height: 34,
+      borderRadius: radius.pill,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      paddingHorizontal: 8,
+    },
+    chipActive: {
+      backgroundColor: colors.accent,
+    },
+    chipIdle: {
+      backgroundColor: 'transparent',
+    },
+    chipLabel: {
+      fontSize: 12,
+      lineHeight: 17,
+      textAlign: 'center' as const,
+    },
+    chipLabelActive: {
+      color: colors.onAccent,
+      fontFamily: font.bold,
+    },
+    chipLabelIdle: {
+      color: colors.mutedText,
+      fontFamily: font.regular,
+    },
+    divider: {
+      height: 1,
+      width: '100%' as const,
+      backgroundColor: colors.border,
+    },
+    scale: {
+      gap: 7,
+    },
+    scaleHead: {
+      flexDirection: 'row' as const,
+      alignItems: 'baseline' as const,
+      justifyContent: 'space-between' as const,
+    },
+    scaleTitle: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    scaleValue: {
+      ...typo.caption,
+      fontFamily: font.bold,
+      color: colors.ink,
+    },
+    scaleBar: {
+      height: 8,
+      borderRadius: 4,
+      overflow: 'hidden' as const,
+      flexDirection: 'row' as const,
+      backgroundColor: colors.track,
+    },
+    scaleMarker: {
+      position: 'absolute' as const,
+      top: -4,
+      width: 3,
+      height: 16,
+      marginLeft: -1.5,
+      borderRadius: 2,
+      backgroundColor: colors.ink,
+    },
+    scaleTicks: {
+      height: 14,
+    },
+    scaleTick: {
+      position: 'absolute' as const,
+      ...typo.micro,
+      color: colors.mutedText,
+      marginLeft: -6,
+    },
+    scaleTickEnd: {
+      marginLeft: -18,
+    },
+    pill: {
+      borderRadius: radius.pill,
+      // 10 + bold 12 keeps the widest label at 174px, exactly the ring's width,
+      // so the chip never overhangs the gauge it labels.
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      maxWidth: '100%' as const,
+    },
+    pillLabel: {
+      fontFamily: font.bold,
+      fontSize: 12,
+      lineHeight: 17,
+      textAlign: 'center' as const,
+    },
+    error: {
+      minHeight: 60,
+      borderRadius: radius.card,
+      backgroundColor: colors.tint,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.gutter,
+      gap: 6,
+    },
+    errorText: {
+      ...typo.body,
+      color: colors.ink,
+    },
+    errorRetry: {
+      ...typo.bodyStrong,
+      color: colors.accent,
+    },
+    stale: {
+      minHeight: 32,
+      borderRadius: radius.control,
+      backgroundColor: colors.tint,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 7,
+      paddingHorizontal: 10,
+    },
+    staleText: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+  } satisfies Record<string, ViewStyle | TextStyle | ImageStyle>;
+}

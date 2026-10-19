@@ -1,11 +1,29 @@
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ImageBackground,
+  Linking,
+  Pressable,
+  ScrollView,
+  Share,
+  Text,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CloudSun, HeartPulse, MapPin, Navigation, Star } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  CloudSun,
+  ExternalLink,
+  HeartPulse,
+  MapPin,
+  Navigation,
+  Share2,
+  Star,
+} from 'lucide-react-native';
 
 import { weatherLabel } from '@/api/openMeteo';
 import { AqiRing } from '@/components/AqiRing';
-import { Card, InlineError } from '@/components/ui';
+import { ForecastStrip } from '@/components/ForecastStrip';
+import { Card, InlineError, StaleBadge } from '@/components/ui';
 import { useLocationAir } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
 import { formatTemperature } from '@/lib/format';
@@ -18,16 +36,21 @@ import {
   toggleFavorite,
   useAppState,
 } from '@/state/app';
-import { color, radius, spacing, type as typo } from '@/theme/tokens';
+import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
+import { radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
 export default function DetailLokasiScreen() {
   const topInset = useTopInset();
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const goBack = useBackOrHome('/peta');
   const params = useLocalSearchParams<{ slug?: string }>();
   const slug = typeof params.slug === 'string' ? params.slug : '';
-  const { favorites, settings } = useAppState();
-  const entry = findLocation(slug);
-  const air = useLocationAir(entry ? entry.location : null);
+  const { selected, favorites, settings } = useAppState();
+
+  const known = findLocation(slug);
+  const entry = known ?? (selected.slug === slug ? selected : null);
+  const air = useLocationAir(entry ? entry.location : null, slug);
 
   const reading = air.data;
   const aqi = reading?.aqi ?? 0;
@@ -35,6 +58,21 @@ export default function DetailLokasiScreen() {
   const name = entry?.name ?? 'Lokasi';
   const isFavorite = favorites.includes(slug);
   const hero = placeImage(slug);
+
+  const share = () => {
+    const message = reading
+      ? `${name}: AQI ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
+      : `${name} — pantau kualitas udara lewat Awanin.`;
+    void Share.share({ message });
+  };
+
+  const openExternalMap = () => {
+    if (!entry) return;
+    const { latitude, longitude } = entry.location;
+    void Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+    );
+  };
 
   return (
     <View style={styles.screen}>
@@ -45,7 +83,7 @@ export default function DetailLokasiScreen() {
           </ImageBackground>
         ) : (
           <LinearGradient
-            colors={[color.heroSky, '#eef6ff']}
+            colors={[colors.heroSky, colors.heroBottom]}
             style={[styles.hero, { paddingTop: topInset }]}
           />
         )}
@@ -58,27 +96,38 @@ export default function DetailLokasiScreen() {
             onPress={goBack}
             style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
           >
-            <ArrowLeft size={19} color={color.accent} strokeWidth={2} />
+            <ArrowLeft size={19} color={colors.accent} strokeWidth={2} />
           </Pressable>
-          {entry ? (
+          <View style={styles.heroActionRight}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={
-                isFavorite ? `Hapus ${name} dari favorit` : `Simpan ${name} ke favorit`
-              }
-              accessibilityState={{ selected: isFavorite }}
+              accessibilityLabel="Bagikan kualitas udara lokasi ini"
               hitSlop={10}
-              onPress={() => toggleFavorite(slug)}
+              onPress={share}
               style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
             >
-              <Star
-                size={19}
-                color={isFavorite ? color.caution : color.accent}
-                fill={isFavorite ? color.caution : 'transparent'}
-                strokeWidth={2}
-              />
+              <Share2 size={18} color={colors.accent} strokeWidth={2} />
             </Pressable>
-          ) : null}
+            {known ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isFavorite ? `Hapus ${name} dari favorit` : `Simpan ${name} ke favorit`
+                }
+                accessibilityState={{ selected: isFavorite }}
+                hitSlop={10}
+                onPress={() => toggleFavorite(slug)}
+                style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+              >
+                <Star
+                  size={19}
+                  color={isFavorite ? colors.caution : colors.accent}
+                  fill={isFavorite ? colors.caution : 'transparent'}
+                  strokeWidth={2}
+                />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.sections}>
@@ -86,7 +135,7 @@ export default function DetailLokasiScreen() {
             <View style={styles.titleText}>
               <Text style={styles.title}>{name}</Text>
               <View style={styles.areaRow}>
-                <MapPin size={13} color={color.mutedText} strokeWidth={2} />
+                <MapPin size={13} color={colors.mutedText} strokeWidth={2} />
                 <Text style={styles.area}>{entry?.area ?? 'Jakarta'}</Text>
               </View>
             </View>
@@ -98,16 +147,18 @@ export default function DetailLokasiScreen() {
             <InlineError message={air.error} onRetry={() => void air.reload()} />
           ) : (
             <>
+              {reading?.stale ? <StaleBadge cachedAt={reading.cachedAt} /> : null}
+
               <Card style={styles.stats}>
                 <View style={styles.ringWrap}>
                   <AqiRing
                     value={reading ? aqi : '—'}
                     progress={gaugeProgress(aqi)}
-                    categoryColor={reading ? category.color : color.track}
+                    categoryColor={reading ? category.color : colors.track}
                     badge={{
                       label: reading ? category.short : 'Memuat',
-                      tone: reading ? category.color : color.track,
-                      textTone: readableOn(reading ? category.color : color.track),
+                      tone: reading ? category.color : colors.track,
+                      textTone: readableOn(reading ? category.color : colors.track),
                     }}
                     size={148}
                   />
@@ -125,6 +176,8 @@ export default function DetailLokasiScreen() {
                 </View>
               </Card>
 
+              <ForecastStrip days={reading?.forecast} loading={air.loading} />
+
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Buka Tips Kesehatan"
@@ -133,13 +186,17 @@ export default function DetailLokasiScreen() {
               >
                 <Card style={styles.recommend}>
                   <View style={styles.recommendIcon}>
-                    <HeartPulse size={19} color={color.accent} strokeWidth={1.8} />
+                    <HeartPulse size={19} color={colors.accent} strokeWidth={1.8} />
                   </View>
                   <View style={styles.recommendText}>
                     <Text style={styles.recommendTitle}>Rekomendasi</Text>
                     <Text style={styles.recommendBody}>
                       {reading
-                        ? `${category.message} Kamu bisa beraktivitas ${aqi <= 100 ? 'seperti biasa dengan tetap menjaga kesehatan' : 'di dalam ruangan lebih dulu sampai kondisi membaik'}.`
+                        ? `${category.message} Kamu bisa beraktivitas ${
+                            aqi <= 100
+                              ? 'seperti biasa dengan tetap menjaga kesehatan'
+                              : 'di dalam ruangan lebih dulu sampai kondisi membaik'
+                          }.`
                         : 'Menghubungkan ke Open-Meteo untuk membaca kondisi terkini.'}
                     </Text>
                   </View>
@@ -148,7 +205,7 @@ export default function DetailLokasiScreen() {
 
               <Card style={styles.weather}>
                 <View style={styles.recommendIcon}>
-                  <CloudSun size={19} color={color.accent} strokeWidth={1.8} />
+                  <CloudSun size={19} color={colors.accent} strokeWidth={1.8} />
                 </View>
                 <View style={styles.recommendText}>
                   <Text style={styles.recommendTitle}>Cuaca</Text>
@@ -157,6 +214,16 @@ export default function DetailLokasiScreen() {
                       ? `${formatTemperature(reading.temperature, settings.temperatureUnit)} · ${weatherLabel(reading.weatherCode)} · kelembapan ${reading.humidity}% · angin ${reading.wind} km/j`
                       : 'Menghubungkan ke Open-Meteo…'}
                   </Text>
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="Buka lokasi ini di Google Maps"
+                    onPress={openExternalMap}
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.mapLink, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.mapLinkLabel}>Buka di Google Maps</Text>
+                    <ExternalLink size={13} color={colors.accent} strokeWidth={1.8} />
+                  </Pressable>
                 </View>
               </Card>
             </>
@@ -165,7 +232,7 @@ export default function DetailLokasiScreen() {
       </ScrollView>
 
       {entry ? (
-        <View style={[styles.footer, { paddingBottom: 12 }]}>
+        <View style={styles.footer}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Lihat rute ke ${name} di peta`}
@@ -175,7 +242,7 @@ export default function DetailLokasiScreen() {
             }}
             style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           >
-            <Navigation size={18} color={color.surface} strokeWidth={2} />
+            <Navigation size={18} color={colors.onAccent} strokeWidth={2} />
             <Text style={styles.ctaLabel}>Lihat Rute</Text>
           </Pressable>
         </View>
@@ -192,157 +259,175 @@ const PLACEHOLDER_POLLUTANTS = [
   { key: 'so2', label: 'SO₂', value: 0, unit: 'μg/m³' },
 ];
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: color.bg,
-  },
-  content: {
-    paddingBottom: 110,
-  },
-  hero: {
-    width: '100%',
-    height: 220,
-  },
-  heroOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(21, 60, 112, 0.10)',
-  },
-  heroActions: {
-    position: 'absolute',
-    left: spacing.gutter,
-    right: spacing.gutter,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  circleButton: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    backgroundColor: color.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  sections: {
-    paddingHorizontal: spacing.gutter,
-    marginTop: -22,
-    gap: spacing.section,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  titleText: {
-    gap: 3,
-  },
-  title: {
-    ...typo.title,
-    fontSize: 22,
-    lineHeight: 27,
-    color: color.ink,
-  },
-  areaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  area: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  stats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  ringWrap: {
-    width: 148,
-  },
-  pollutants: {
-    flex: 1,
-    gap: 8,
-  },
-  pollutantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pollutantLabel: {
-    ...typo.body,
-    color: color.mutedText,
-  },
-  pollutantValue: {
-    ...typo.bodyStrong,
-    color: color.ink,
-  },
-  pollutantUnit: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  recommend: {
-    flexDirection: 'row',
-    padding: 14,
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  weather: {
-    flexDirection: 'row',
-    padding: 14,
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  recommendIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: color.tint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recommendText: {
-    flex: 1,
-    gap: 3,
-  },
-  recommendTitle: {
-    ...typo.bodyStrong,
-    color: color.ink,
-  },
-  recommendBody: {
-    ...typo.caption,
-    color: color.mutedText,
-    lineHeight: 16,
-  },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: spacing.gutter,
-    paddingTop: 10,
-    backgroundColor: color.bg,
-    borderTopWidth: 1,
-    borderTopColor: color.border,
-  },
-  cta: {
-    height: 52,
-    borderRadius: radius.card,
-    backgroundColor: color.accent,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  ctaPressed: {
-    opacity: 0.85,
-  },
-  ctaLabel: {
-    ...typo.bodyStrong,
-    fontSize: 15,
-    color: color.surface,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingBottom: 110,
+    },
+    hero: {
+      width: '100%' as const,
+      height: 220,
+    },
+    heroOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(21, 60, 112, 0.10)',
+    },
+    heroActions: {
+      position: 'absolute' as const,
+      left: spacing.gutter,
+      right: spacing.gutter,
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+    },
+    heroActionRight: {
+      flexDirection: 'row' as const,
+      gap: 8,
+    },
+    circleButton: {
+      width: 38,
+      height: 38,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surface,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    sections: {
+      paddingHorizontal: spacing.gutter,
+      marginTop: -22,
+      gap: spacing.section,
+    },
+    titleRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'flex-end' as const,
+      justifyContent: 'space-between' as const,
+    },
+    titleText: {
+      gap: 3,
+    },
+    title: {
+      ...typo.title,
+      fontSize: 22,
+      lineHeight: 27,
+      color: colors.ink,
+    },
+    areaRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 4,
+    },
+    area: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    stats: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      padding: 16,
+      gap: 12,
+    },
+    ringWrap: {
+      width: 148,
+    },
+    pollutants: {
+      flex: 1,
+      gap: 8,
+    },
+    pollutantRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'space-between' as const,
+    },
+    pollutantLabel: {
+      ...typo.body,
+      color: colors.mutedText,
+    },
+    pollutantValue: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    pollutantUnit: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    recommend: {
+      flexDirection: 'row' as const,
+      padding: 14,
+      gap: 12,
+      alignItems: 'flex-start' as const,
+    },
+    weather: {
+      flexDirection: 'row' as const,
+      padding: 14,
+      gap: 12,
+      alignItems: 'flex-start' as const,
+    },
+    recommendIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.tint,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    recommendText: {
+      flex: 1,
+      gap: 3,
+    },
+    recommendTitle: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    recommendBody: {
+      ...typo.caption,
+      color: colors.mutedText,
+      lineHeight: 16,
+    },
+    mapLink: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 4,
+      marginTop: 4,
+    },
+    mapLinkLabel: {
+      ...typo.caption,
+      color: colors.accent,
+      textDecorationLine: 'underline' as const,
+    },
+    footer: {
+      position: 'absolute' as const,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: spacing.gutter,
+      paddingTop: 10,
+      paddingBottom: 12,
+      backgroundColor: colors.bg,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    cta: {
+      height: 52,
+      borderRadius: radius.card,
+      backgroundColor: colors.accent,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      gap: 8,
+    },
+    ctaPressed: {
+      opacity: 0.85,
+    },
+    ctaLabel: {
+      ...typo.bodyStrong,
+      fontSize: 15,
+      color: colors.onAccent,
+    },
+  };
+}

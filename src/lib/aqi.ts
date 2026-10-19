@@ -1,6 +1,7 @@
 /** US AQI breakpoints and Indonesian copy. */
 
-import { color } from '@/theme/tokens';
+/** Ink used by the light palette; only a contrast reference for chip labels. */
+const INK = '#153c70';
 
 export type AqiCategory = {
   /** Lower bound, inclusive */
@@ -142,8 +143,8 @@ function luminance(hex: string): number {
 export function readableOn(background: string): string {
   const backgroundLuminance = luminance(background);
   const white = 1.05 / (backgroundLuminance + 0.05);
-  const ink = (backgroundLuminance + 0.05) / (luminance(color.ink) + 0.05);
-  return white >= ink ? '#ffffff' : color.ink;
+  const ink = (backgroundLuminance + 0.05) / (luminance(INK) + 0.05);
+  return white >= ink ? '#ffffff' : INK;
 }
 
 /**

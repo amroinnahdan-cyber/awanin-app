@@ -1,25 +1,30 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ChevronRight, ExternalLink } from 'lucide-react-native';
 
 import { InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen';
 import { ATTRIBUTION } from '@/api/openMeteo';
-import { color, font, radius, spacing, type as typo } from '@/theme/tokens';
+import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
+import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
 const FACTS = [
-  { label: 'Versi', value: '1.0.0 (Expo)' },
+  { label: 'Versi', value: '1.1.0 (Expo)' },
   { label: 'Sumber data', value: 'Open-Meteo' },
   { label: 'Skala indeks', value: 'US AQI (0–500)' },
-  { label: 'Lokasi dipantau', value: '5 titik di Jakarta' },
+  { label: 'Backend', value: 'Awanin API (opsional)' },
+  { label: 'Lokasi dipantau', value: '5 titik + GPS' },
 ];
 
 export default function TentangScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
+
   return (
     <InfoScreen title="Tentang Awanin" subtitle="Pemantau kualitas udara Jakarta">
       <InfoSection>
         <View style={styles.identity}>
-          <LinearGradient colors={[color.sky, color.tint]} style={styles.badge}>
+          <LinearGradient colors={[colors.sky, colors.tint]} style={styles.badge}>
             <Text style={styles.badgeLetter}>A</Text>
           </LinearGradient>
           <View style={styles.identityText}>
@@ -40,9 +45,9 @@ export default function TentangScreen() {
 
       <InfoSection title="Sumber data" delay={60}>
         <InfoParagraph>
-          {ATTRIBUTION}. Data diambil langsung dari API publik Open-Meteo saat layar dibuka dan
-          disimpan sebentar di memori (5 menit untuk pembacaan terkini, 15 menit untuk riwayat),
-          jadi membuka beberapa tab tidak membanjiri server mereka.
+          {ATTRIBUTION}. Data diambil lewat backend Awanin bila tersedia (cache 10 menit), atau
+          langsung ke Open-Meteo bila server tidak dikonfigurasi/dijangkau. Riwayat disimpan 15
+          menit; pembacaan terakhir juga disimpan di perangkat untuk mode offline.
         </InfoParagraph>
         <InfoParagraph>
           Indeks yang ditampilkan adalah US AQI, skala yang dipakai Open-Meteo untuk parameter
@@ -55,11 +60,23 @@ export default function TentangScreen() {
           style={({ pressed }) => [styles.link, pressed && styles.pressed]}
         >
           <Text style={styles.linkLabel}>open-meteo.com</Text>
-          <ExternalLink size={15} color={color.accent} strokeWidth={1.8} />
+          <ExternalLink size={15} color={colors.accent} strokeWidth={1.8} />
         </Pressable>
       </InfoSection>
 
-      <InfoSection title="Catatan resolusi" delay={120}>
+      <InfoSection title="Prakiraan & peringatan" delay={120}>
+        <InfoParagraph>
+          Prakiraan tujuh hari dihitung dari deret hourly us_aqi (API kualitas udara tidak punya
+          blok daily). Server memeriksa lima lokasi tiap 15 menit, menyimpan tren, dan mengirim
+          push Expo saat kategori AQI memburuk melewati ambang perangkat.
+        </InfoParagraph>
+        <InfoParagraph>
+          Push jarak jauh memerlukan development build dengan projectId EAS; Expo Go tidak
+          mendukungnya. Aplikasi tetap berfungsi penuh tanpa push.
+        </InfoParagraph>
+      </InfoSection>
+
+      <InfoSection title="Catatan resolusi" delay={180}>
         <InfoParagraph>
           Model kualitas udara Open-Meteo punya resolusi grid sekitar 11 km. Jakarta Pusat, Monas,
           dan Bundaran HI berada di dalam sel grid yang sama, sehingga angkanya bisa identik
@@ -68,14 +85,15 @@ export default function TentangScreen() {
         </InfoParagraph>
       </InfoSection>
 
-      <InfoSection title="Dibuat dengan" delay={180}>
+      <InfoSection title="Dibuat dengan" delay={240}>
         <InfoParagraph>
-          Expo + React Native, TypeScript, dan react-native-svg untuk gauge dan grafiknya. Desain
-          mengikuti file Figma “Awanin — Mobile App” dengan penyesuaian kontras aksesibilitas.
+          Expo + React Native, TypeScript, react-native-svg untuk gauge dan grafik, serta
+          Express + SQLite untuk backend. Desain mengikuti file Figma “Awanin — Mobile App” dengan
+          penyesuaian kontras aksesibilitas dan dukungan mode gelap.
         </InfoParagraph>
       </InfoSection>
 
-      <InfoSection title="Lainnya" delay={240}>
+      <InfoSection title="Lainnya" delay={300}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Buka Privasi & keamanan"
@@ -83,7 +101,7 @@ export default function TentangScreen() {
           style={({ pressed }) => [styles.link, pressed && styles.pressed]}
         >
           <Text style={styles.linkLabel}>Privasi & keamanan</Text>
-          <ChevronRight size={15} color={color.accent} strokeWidth={1.8} />
+          <ChevronRight size={15} color={colors.accent} strokeWidth={1.8} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -92,7 +110,7 @@ export default function TentangScreen() {
           style={({ pressed }) => [styles.link, pressed && styles.pressed]}
         >
           <Text style={styles.linkLabel}>Bantuan</Text>
-          <ChevronRight size={15} color={color.accent} strokeWidth={1.8} />
+          <ChevronRight size={15} color={colors.accent} strokeWidth={1.8} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -101,74 +119,76 @@ export default function TentangScreen() {
           style={({ pressed }) => [styles.link, pressed && styles.pressed]}
         >
           <Text style={styles.linkLabel}>Tips Kesehatan</Text>
-          <ChevronRight size={15} color={color.accent} strokeWidth={1.8} />
+          <ChevronRight size={15} color={colors.accent} strokeWidth={1.8} />
         </Pressable>
       </InfoSection>
     </InfoScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  identity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    paddingBottom: spacing.section,
-  },
-  badge: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeLetter: {
-    fontFamily: font.extrabold,
-    fontSize: 24,
-    lineHeight: 30,
-    color: color.accent,
-  },
-  identityText: {
-    gap: 2,
-  },
-  name: {
-    ...typo.heading,
-    color: color.ink,
-  },
-  tagline: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  facts: {
-    gap: 8,
-  },
-  factRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  factLabel: {
-    ...typo.body,
-    color: color.mutedText,
-  },
-  factValue: {
-    ...typo.body,
-    fontFamily: font.bold,
-    color: color.ink,
-  },
-  link: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 2,
-  },
-  linkLabel: {
-    ...typo.bodyStrong,
-    color: color.accent,
-    textDecorationLine: 'underline',
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    identity: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 13,
+      paddingBottom: spacing.section,
+    },
+    badge: {
+      width: 56,
+      height: 56,
+      borderRadius: radius.pill,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    badgeLetter: {
+      fontFamily: font.extrabold,
+      fontSize: 24,
+      lineHeight: 30,
+      color: colors.accent,
+    },
+    identityText: {
+      gap: 2,
+    },
+    name: {
+      ...typo.heading,
+      color: colors.ink,
+    },
+    tagline: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    facts: {
+      gap: 8,
+    },
+    factRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'space-between' as const,
+      gap: 12,
+    },
+    factLabel: {
+      ...typo.body,
+      color: colors.mutedText,
+    },
+    factValue: {
+      ...typo.body,
+      fontFamily: font.bold,
+      color: colors.ink,
+    },
+    link: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 6,
+      paddingTop: 2,
+    },
+    linkLabel: {
+      ...typo.bodyStrong,
+      color: colors.accent,
+      textDecorationLine: 'underline' as const,
+    },
+    pressed: {
+      opacity: 0.6,
+    },
+  };
+}

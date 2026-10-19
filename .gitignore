@@ -31,8 +31,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (keep the examples in git)
+.env
 .env*.local
+server/.env
+!.env.example
+!server/.env.example
 
 # typescript
 *.tsbuildinfo
@@ -45,3 +49,9 @@ yarn-error.*
 Expo-Go-*.apk
 *.apk
 __pycache__/
+
+# backend runtime data and secrets
+/server/data/
+/server/.env
+/server/coverage/
+

@@ -1,24 +1,42 @@
 import { useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  Share,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Bell, ChevronDown, ChevronRight, MapPin, Wind } from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, MapPin, Share2, Wind } from 'lucide-react-native';
 
 import { locationSlug, type PollutantReading } from '@/api/openMeteo';
 import { AqiRing } from '@/components/AqiRing';
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
+import { ForecastStrip } from '@/components/ForecastStrip';
 import { LocationSheet } from '@/components/LocationSheet';
 import { FadeIn } from '@/components/motion';
-import { Card, HeroGlow, InlineError, SectionTitle, Skeleton } from '@/components/ui';
+import {
+  Card,
+  HeroGlow,
+  InlineError,
+  SectionTitle,
+  Skeleton,
+  StaleBadge,
+} from '@/components/ui';
 import { usePopularLocations, useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
 import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
 import { placeImage } from '@/lib/placeImages';
 import { useAppState } from '@/state/app';
 import { useNotifications } from '@/state/notifications';
-import { color, font, radius, spacing, type as typo } from '@/theme/tokens';
+import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
+import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
 function PollutantValue({ pollutant }: { pollutant: PollutantReading | undefined }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.pmItem}>
       <Text style={styles.pmLabel}>{pollutant?.label ?? '—'}</Text>
@@ -30,6 +48,8 @@ function PollutantValue({ pollutant }: { pollutant: PollutantReading | undefined
 }
 
 function PopularCard({ name, aqi, loading }: { name: string; aqi: number; loading: boolean }) {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const category = categoryFor(aqi);
   const image = placeImage(locationSlug(name));
   return (
@@ -44,7 +64,7 @@ function PopularCard({ name, aqi, loading }: { name: string; aqi: number; loadin
       {image ? (
         <Image source={image} style={styles.popularPhoto} />
       ) : (
-        <LinearGradient colors={[color.sky, color.tint]} style={styles.popularPhoto} />
+        <LinearGradient colors={[colors.sky, colors.tint]} style={styles.popularPhoto} />
       )}
       <Text style={styles.popularName} numberOfLines={1}>
         {name}
@@ -52,9 +72,7 @@ function PopularCard({ name, aqi, loading }: { name: string; aqi: number; loadin
       {loading ? (
         <Skeleton width={44} height={12} />
       ) : (
-        <Text style={[styles.popularValue, { color: category.color }]}>
-          {aqi} AQI
-        </Text>
+        <Text style={[styles.popularValue, { color: category.color }]}>{aqi} AQI</Text>
       )}
     </Pressable>
   );
@@ -62,6 +80,8 @@ function PopularCard({ name, aqi, loading }: { name: string; aqi: number; loadin
 
 export default function BerandaScreen() {
   const topInset = useTopInset();
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const air = useSelectedAir();
   const popular = usePopularLocations();
   const history = useSelectedHistory(2);
@@ -87,12 +107,24 @@ export default function BerandaScreen() {
         : 'lebih buruk dibanding kemarin.'
       : 'akan tersedia setelah cukup data terkumpul.';
 
+  const shareReading = () => {
+    const message = reading
+      ? `AQI ${selected.name} sekarang ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
+      : `Awanin — pantau kualitas udara Jakarta setiap saat.`;
+    void Share.share({ message });
+  };
+
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={air.refreshing} onRefresh={() => void air.reload()} />
+        <RefreshControl
+          refreshing={air.refreshing}
+          onRefresh={() => void air.reload()}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+        />
       }
     >
       <View style={{ paddingTop: topInset }}>
@@ -108,16 +140,29 @@ export default function BerandaScreen() {
           />
           <Text style={styles.brandWord}>awanin</Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'}
-          hitSlop={12}
-          onPress={() => router.push('/notifikasi')}
-          style={({ pressed }) => [pressed && styles.pressed]}
-        >
-          <Bell size={22} color={color.accent} strokeWidth={1.8} />
-          {unread > 0 ? <View style={styles.bellDot} /> : null}
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Bagikan kualitas udara"
+            hitSlop={12}
+            onPress={shareReading}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Share2 size={20} color={colors.accent} strokeWidth={1.8} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'
+            }
+            hitSlop={12}
+            onPress={() => router.push('/notifikasi')}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Bell size={22} color={colors.accent} strokeWidth={1.8} />
+            {unread > 0 ? <View style={styles.bellDot} /> : null}
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.locationRow}>
@@ -127,9 +172,9 @@ export default function BerandaScreen() {
           onPress={() => setPickerOpen(true)}
           style={({ pressed }) => [styles.location, pressed && styles.pressed]}
         >
-          <MapPin size={15} color={color.accent} strokeWidth={2} />
+          <MapPin size={15} color={colors.accent} strokeWidth={2} />
           <Text style={styles.locationText}>{selected.name}</Text>
-          <ChevronDown size={14} color={color.accent} strokeWidth={2} />
+          <ChevronDown size={14} color={colors.accent} strokeWidth={2} />
         </Pressable>
       </View>
 
@@ -141,17 +186,17 @@ export default function BerandaScreen() {
         </Text>
       </View>
 
-      <LinearGradient colors={[color.heroSky, '#eef6ff']} style={styles.hero}>
+      <LinearGradient colors={[colors.heroSky, colors.heroBottom]} style={styles.hero}>
         <HeroGlow />
 
         <AqiRing
           value={reading ? aqi : '—'}
           progress={gaugeProgress(aqi)}
-          categoryColor={reading ? category.color : color.track}
+          categoryColor={reading ? category.color : colors.track}
           badge={{
             label: reading ? category.short : 'Memuat',
-            tone: reading ? category.color : color.track,
-            textTone: readableOn(reading ? category.color : color.track),
+            tone: reading ? category.color : colors.track,
+            textTone: readableOn(reading ? category.color : colors.track),
           }}
         />
 
@@ -173,11 +218,19 @@ export default function BerandaScreen() {
       </LinearGradient>
 
       <View style={styles.sections}>
+        {reading?.stale ? (
+          <StaleBadge cachedAt={reading.cachedAt} />
+        ) : null}
+
         {air.error && !reading ? (
           <InlineError message={air.error} onRetry={() => void air.reload()} />
         ) : null}
 
-        <FadeIn delay={60}>
+        <FadeIn delay={40}>
+          <ForecastStrip days={reading?.forecast} loading={air.loading} />
+        </FadeIn>
+
+        <FadeIn delay={90}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Buka riwayat kualitas udara"
@@ -186,18 +239,18 @@ export default function BerandaScreen() {
           >
             <Card style={styles.compare}>
               <View style={styles.compareIcon}>
-                <Wind size={20} color={color.accent} strokeWidth={1.8} />
+                <Wind size={20} color={colors.accent} strokeWidth={1.8} />
               </View>
               <View style={styles.compareText}>
                 <Text style={styles.compareTitle}>Kualitas udara hari ini</Text>
                 <Text style={styles.compareSubtitle}>{comparison}</Text>
               </View>
-              <ChevronRight size={18} color={color.mutedText} strokeWidth={1.8} />
+              <ChevronRight size={18} color={colors.mutedText} strokeWidth={1.8} />
             </Card>
           </Pressable>
         </FadeIn>
 
-        <FadeIn delay={120} style={styles.popularBlock}>
+        <FadeIn delay={140} style={styles.popularBlock}>
           <SectionTitle
             title="Lokasi Populer"
             action="Lihat semua"
@@ -244,189 +297,196 @@ const popularFallback = [
   { name: 'Kota Tua', aqi: 0 },
 ];
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: color.bg,
-  },
-  content: {
-    paddingBottom: 21,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: spacing.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  brand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  brandGlyph: {
-    width: 30,
-    height: 30,
-  },
-  brandWord: {
-    fontFamily: font.extrabold,
-    fontSize: 21,
-    lineHeight: 26,
-    color: color.accent,
-    letterSpacing: -0.5,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  bellDot: {
-    position: 'absolute',
-    top: -1,
-    right: -1,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: color.caution,
-    borderWidth: 1.5,
-    borderColor: color.bg,
-  },
-  locationRow: {
-    paddingHorizontal: spacing.gutter,
-    marginTop: 2,
-    marginBottom: 10,
-  },
-  location: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: color.surface,
-    borderRadius: radius.pill,
-    paddingLeft: 10,
-    paddingRight: 8,
-    paddingVertical: 6,
-  },
-  locationText: {
-    ...typo.bodyStrong,
-    color: color.ink,
-  },
-  intro: {
-    paddingHorizontal: spacing.gutter,
-    gap: 4,
-    marginBottom: 12,
-  },
-  introTitle: {
-    ...typo.title,
-    color: color.ink,
-  },
-  introBody: {
-    ...typo.body,
-    color: color.mutedText,
-    maxWidth: 300,
-  },
-  hero: {
-    marginHorizontal: spacing.gutter,
-    borderRadius: radius.card,
-    overflow: 'hidden',
-    alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 16,
-    paddingHorizontal: 12,
-  },
-  pmRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 14,
-  },
-  pmItem: {
-    alignItems: 'center',
-    gap: 1,
-  },
-  pmLabel: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  pmValue: {
-    ...typo.bodyStrong,
-    color: color.ink,
-  },
-  pmDivider: {
-    width: 1,
-    height: 22,
-    backgroundColor: color.border,
-  },
-  sections: {
-    paddingHorizontal: spacing.gutter,
-    paddingTop: 18,
-    gap: spacing.section,
-  },
-  compare: {
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  compareIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: color.tint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compareText: {
-    flex: 1,
-    gap: 2,
-  },
-  compareTitle: {
-    ...typo.bodyStrong,
-    color: color.ink,
-  },
-  compareSubtitle: {
-    ...typo.caption,
-    color: color.mutedText,
-  },
-  popularBlock: {
-    gap: spacing.section,
-  },
-  popularRow: {
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  popular: {
-    width: 80,
-    gap: 5,
-    alignItems: 'center',
-  },
-  popularPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: radius.control,
-  },
-  popularName: {
-    ...typo.caption,
-    fontFamily: font.bold,
-    color: color.ink,
-    maxWidth: 80,
-    textAlign: 'center',
-  },
-  popularValue: {
-    ...typo.caption,
-    fontFamily: font.bold,
-    fontSize: 11,
-  },
-  cardPressed: {
-    opacity: 0.75,
-  },
-  credit: {
-    alignItems: 'center',
-    paddingTop: 2,
-  },
-  creditText: {
-    ...typo.micro,
-    color: color.mutedText,
-    textDecorationLine: 'underline',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return {
+    screen: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingBottom: 21,
+    },
+    header: {
+      height: 56,
+      paddingHorizontal: spacing.gutter,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'space-between' as const,
+    },
+    headerActions: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 16,
+    },
+    brand: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 7,
+    },
+    brandGlyph: {
+      width: 30,
+      height: 30,
+    },
+    brandWord: {
+      fontFamily: font.extrabold,
+      fontSize: 21,
+      lineHeight: 26,
+      color: colors.accent,
+      letterSpacing: -0.5,
+    },
+    pressed: {
+      opacity: 0.6,
+    },
+    bellDot: {
+      position: 'absolute' as const,
+      top: -1,
+      right: -1,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.caution,
+      borderWidth: 1.5,
+      borderColor: colors.bg,
+    },
+    locationRow: {
+      paddingHorizontal: spacing.gutter,
+      marginTop: 2,
+      marginBottom: 10,
+    },
+    location: {
+      alignSelf: 'flex-start' as const,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 6,
+      backgroundColor: colors.surface,
+      borderRadius: radius.pill,
+      paddingLeft: 10,
+      paddingRight: 8,
+      paddingVertical: 6,
+    },
+    locationText: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    intro: {
+      paddingHorizontal: spacing.gutter,
+      gap: 4,
+      marginBottom: 12,
+    },
+    introTitle: {
+      ...typo.title,
+      color: colors.ink,
+    },
+    introBody: {
+      ...typo.body,
+      color: colors.mutedText,
+      maxWidth: 300,
+    },
+    hero: {
+      marginHorizontal: spacing.gutter,
+      borderRadius: radius.card,
+      overflow: 'hidden' as const,
+      alignItems: 'center' as const,
+      paddingTop: 20,
+      paddingBottom: 16,
+      paddingHorizontal: 12,
+    },
+    pmRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      gap: 16,
+      marginTop: 14,
+    },
+    pmItem: {
+      alignItems: 'center' as const,
+      gap: 1,
+    },
+    pmLabel: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    pmValue: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    pmDivider: {
+      width: 1,
+      height: 22,
+      backgroundColor: colors.border,
+    },
+    sections: {
+      paddingHorizontal: spacing.gutter,
+      paddingTop: 18,
+      gap: spacing.section,
+    },
+    compare: {
+      padding: 14,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+    },
+    compareIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.tint,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    compareText: {
+      flex: 1,
+      gap: 2,
+    },
+    compareTitle: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    compareSubtitle: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    popularBlock: {
+      gap: spacing.section,
+    },
+    popularRow: {
+      flexDirection: 'row' as const,
+      gap: 10,
+      justifyContent: 'space-between' as const,
+    },
+    popular: {
+      width: 80,
+      gap: 5,
+      alignItems: 'center' as const,
+    },
+    popularPhoto: {
+      width: 80,
+      height: 80,
+      borderRadius: radius.control,
+    },
+    popularName: {
+      ...typo.caption,
+      fontFamily: font.bold,
+      color: colors.ink,
+      maxWidth: 80,
+      textAlign: 'center' as const,
+    },
+    popularValue: {
+      ...typo.caption,
+      fontFamily: font.bold,
+      fontSize: 11,
+    },
+    cardPressed: {
+      opacity: 0.75,
+    },
+    credit: {
+      alignItems: 'center' as const,
+      paddingTop: 2,
+    },
+    creditText: {
+      ...typo.micro,
+      color: colors.mutedText,
+      textDecorationLine: 'underline' as const,
+    },
+  };
+}

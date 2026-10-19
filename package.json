@@ -8,11 +8,15 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "~58.0.14",
     "expo-constants": "~58.0.12",
+    "expo-device": "~58.0.5",
     "expo-font": "~58.0.8",
     "expo-linear-gradient": "~58.0.3",
     "expo-linking": "~58.0.13",
+    "expo-location": "~58.0.17",
+    "expo-notifications": "~58.1.5",
     "expo-router": "~58.0.23",
     "expo-status-bar": "~58.0.3",
+    "jest-expo": "~58.0.11",
     "lucide-react-native": "^1.59.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -23,9 +27,13 @@
     "react-native-web": "^0.21.4"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.1.0",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
+    "jest": "^30.5.2",
+    "jest-expo": "~58.0.11",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -33,7 +41,19 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "check": "npm run lint && npm run typecheck && npm test -- --ci",
+    "api": "npm --prefix server run dev",
+    "api:test": "npm --prefix server test"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts",
+      "**/__tests__/**/*.test.tsx"
+    ]
   },
   "private": true
 }

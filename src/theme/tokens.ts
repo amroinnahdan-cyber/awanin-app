@@ -4,55 +4,97 @@
  * Colour values were verified against rendered PNG pixels (bg #f5f9ff, ring #4abc78
  * match byte-for-byte), so these are the file's real values, not estimates.
  *
- * One deliberate deviation: `muted` (#8192ab) fails WCAG AA when used for small text
- * (3.17:1 on white, 2.97:1 on bg). `mutedText` replaces it for text under 18px and
- * passes AA on both white (5.4:1) and bg (4.9:1). `muted` stays for icons (3.17:1 >
- * the 3.1 threshold for graphical objects) so visuals remain as designed.
+ * Two deliberate deviations from the file:
+ * - `muted` (#8192ab) fails WCAG AA for small text (3.17:1 on white), so
+ *   `mutedText` replaces it under 18px and passes AA on both white and bg.
+ * - The palette is now a pair: `lightColors` is the file, `darkColors` is the
+ *   same hierarchy restated for dark surfaces (no pure black, accent lifted to
+ *   #6aa6ff so it still passes AA on #0d1420).
  */
 import type { TextStyle, ViewStyle } from 'react-native';
 
-export const color = {
-  /** Page background */
+export type ThemeColors = {
+  bg: string;
+  ink: string;
+  muted: string;
+  mutedText: string;
+  accent: string;
+  surface: string;
+  tint: string;
+  border: string;
+  good: string;
+  caution: string;
+  track: string;
+  sky: string;
+  heroSky: string;
+  /** Bottom stop of the hero gradient */
+  heroBottom: string;
+  /** Soft off-white core of the hero glow */
+  glow: string;
+  /** Map road strokes */
+  road: string;
+  mapBg: string;
+  park: string;
+  river: string;
+  mapLabel: string;
+  areaLabel: string;
+  /** Text/icons drawn on top of `accent` or another saturated fill */
+  onAccent: string;
+  /** Bottom-sheet backdrop */
+  scrim: string;
+};
+
+export const lightColors: ThemeColors = {
   bg: '#f5f9ff',
-  /** Primary text */
   ink: '#153c70',
-  /** Secondary text as drawn in Figma (icons, large text only) */
   muted: '#8192ab',
-  /** AA-compliant replacement for small secondary text */
   mutedText: '#596b86',
-  /** Accent / active / links */
   accent: '#1854c8',
-  /** Card surface */
   surface: '#ffffff',
-  /** Tinted card surface */
   tint: '#eaf3ff',
-  /** Hairline separators */
   border: '#e5edf8',
-  /** AQI: Baik */
   good: '#4abc78',
-  /** AQI: Sedang */
   caution: '#f5bb42',
-  /** Ring track */
   track: '#dfecfd',
-  /** Splash sky */
   sky: '#d9eeff',
-  /**
-   * Top stop of the hero gradient. Measured as #c6ecfe in the 1:1 export
-   * (splash-screen.png is a different, shallower blue — hence a separate token).
-   * Using `sky` here washed the hero out and made the ring's track invisible.
-   */
   heroSky: '#c6ecfe',
-  /** Map canvas */
+  heroBottom: '#eef6ff',
+  glow: '#fcfcff',
+  road: '#ffffff',
   mapBg: '#f1f4f4',
-  /** Map green cover */
   park: '#e0eee2',
-  /** Map river */
   river: '#d7ebf6',
-  /** Map city label */
   mapLabel: '#748ca7',
-  /** Map district label */
   areaLabel: '#a3adb8',
-} as const;
+  onAccent: '#ffffff',
+  scrim: 'rgba(15, 38, 74, 0.34)',
+};
+
+export const darkColors: ThemeColors = {
+  bg: '#0d1420',
+  ink: '#e8f1ff',
+  muted: '#8fa3bf',
+  mutedText: '#a9b9cd',
+  accent: '#6aa6ff',
+  surface: '#151f2e',
+  tint: '#1c2a3d',
+  border: '#243349',
+  good: '#4abc78',
+  caution: '#f5bb42',
+  track: '#22324a',
+  sky: '#16324f',
+  heroSky: '#173a5e',
+  heroBottom: '#101d2c',
+  glow: '#22344a',
+  road: '#2a3b52',
+  mapBg: '#0f1724',
+  park: '#16281f',
+  river: '#173247',
+  mapLabel: '#8ba2bd',
+  areaLabel: '#6f86a1',
+  onAccent: '#08182b',
+  scrim: 'rgba(0, 0, 0, 0.55)',
+};
 
 export const spacing = {
   /** Screen gutter used by every content block (20) */
@@ -108,7 +150,7 @@ export const type = {
   action: { fontFamily: font.regular, fontSize: 11, lineHeight: 15 },
 } satisfies Record<string, TextStyle>;
 
-/** rgba(40, 91, 160, 0.06) @ 0/4 blur 18 — the file's single shadow */
+/** rgba(40, 91, 160, 0.06) @ 0/4 blur 18 — the file's single shadow. */
 export const shadow: ViewStyle = {
   shadowColor: '#285ba0',
   shadowOpacity: 0.06,

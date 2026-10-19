@@ -55,6 +55,7 @@ export const ALL_LOCATIONS: AppLocation[] = [
 ];
 
 export type TemperatureUnit = 'C' | 'F';
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type AppSettings = {
   /** Master switch — "Peringatan Kualitas Udara" */
@@ -66,6 +67,10 @@ export type AppSettings = {
   /** "Update Cuaca" — once-a-day digest of reading + weather */
   weatherUpdate: boolean;
   temperatureUnit: TemperatureUnit;
+  /** Light / dark / follow the OS */
+  themeMode: ThemeMode;
+  /** First-run onboarding finished */
+  onboarded: boolean;
 };
 
 type AppState = {
@@ -80,6 +85,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   tipsHealth: true,
   weatherUpdate: false,
   temperatureUnit: 'C',
+  themeMode: 'system',
+  onboarded: false,
 };
 
 function defaultState(): AppState {
@@ -90,6 +97,7 @@ let state: AppState = defaultState();
 
 type PersistedAppState = {
   selectedSlug?: string;
+  selected?: { slug: string; name: string; area: string; latitude: number; longitude: number };
   favorites?: string[];
   settings?: Partial<AppSettings>;
 };
@@ -99,6 +107,13 @@ const listeners = new Set<() => void>();
 function emit() {
   savePersisted('app', {
     selectedSlug: state.selected.slug,
+    selected: {
+      slug: state.selected.slug,
+      name: state.selected.name,
+      area: state.selected.area,
+      latitude: state.selected.location.latitude,
+      longitude: state.selected.location.longitude,
+    },
     favorites: state.favorites,
     settings: state.settings,
   } satisfies PersistedAppState);
@@ -122,6 +137,23 @@ export function useAppState(): AppState {
 
 export function findLocation(slug: string): AppLocation | null {
   return ALL_LOCATIONS.find((entry) => entry.slug === slug) ?? null;
+}
+
+const CUSTOM_SLUG = 'lokasi-saya';
+
+/**
+ * GPS result, kept as a normal AppLocation so every screen keeps working.
+ * The coordinates are persisted with the rest of the state.
+ */
+export function selectCustomLocation(name: string, latitude: number, longitude: number) {
+  const next: AppLocation = {
+    slug: CUSTOM_SLUG,
+    name,
+    area: 'Lokasi perangkat',
+    location: { latitude, longitude, timezone: 'Asia/Jakarta' },
+  };
+  state = { ...state, selected: next };
+  emit();
 }
 
 export function selectLocation(slug: string) {
@@ -159,8 +191,21 @@ export function resetAppState() {
 export async function hydrateAppState(): Promise<void> {
   const saved = await loadPersisted<PersistedAppState>('app');
   if (!saved) return;
+  const savedSelection =
+    saved.selectedSlug === CUSTOM_SLUG && saved.selected
+      ? {
+          slug: CUSTOM_SLUG,
+          name: saved.selected.name,
+          area: saved.selected.area,
+          location: {
+            latitude: saved.selected.latitude,
+            longitude: saved.selected.longitude,
+            timezone: 'Asia/Jakarta',
+          },
+        }
+      : null;
   state = {
-    selected: findLocation(saved.selectedSlug ?? '') ?? HOME_LOCATION,
+    selected: savedSelection ?? findLocation(saved.selectedSlug ?? '') ?? HOME_LOCATION,
     favorites: Array.isArray(saved.favorites) ? saved.favorites : state.favorites,
     settings: { ...DEFAULT_SETTINGS, ...saved.settings },
   };

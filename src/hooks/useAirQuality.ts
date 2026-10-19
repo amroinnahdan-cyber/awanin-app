@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  POPULAR_LOCATIONS,
   type Coordinates,
   type CurrentReading,
   type DayAqi,
-  POPULAR_LOCATIONS,
-  fetchAqiAt,
-  fetchCurrentReading,
-  fetchDailyAqi,
 } from '@/api/openMeteo';
+import { fetchAirSmart, fetchAqiSmart, fetchHistorySmart } from '@/api/gateway';
 import { ALL_LOCATIONS, useAppState } from '@/state/app';
 import { recordReading } from '@/state/notifications';
 
@@ -62,7 +60,10 @@ function useAsync<T>(
 export function useCurrentAir() {
   const { settings } = useAppState();
   return useAsync<CurrentReading>(async () => {
-    const reading = await fetchCurrentReading();
+    const reading = await fetchAirSmart(
+      { latitude: -6.1754, longitude: 106.8272, timezone: 'Asia/Jakarta' },
+      'jakarta-pusat',
+    );
     recordReading(
       { aqi: reading.aqi, observedAt: reading.observedAt },
       {
@@ -83,7 +84,7 @@ export function useCurrentAir() {
 export function useSelectedAir() {
   const { selected, settings } = useAppState();
   return useAsync<CurrentReading>(async () => {
-    const reading = await fetchCurrentReading(selected.location);
+    const reading = await fetchAirSmart(selected.location, selected.slug);
     recordReading(
       { aqi: reading.aqi, observedAt: reading.observedAt, place: selected.name },
       {
@@ -102,18 +103,13 @@ export function useSelectedAir() {
   ]);
 }
 
-/** Daily AQI series for the history chart (7 or 30 days). */
-export function useAqiHistory(pastDays: 7 | 30) {
-  return useAsync<DayAqi[]>(() => fetchDailyAqi(pastDays), [pastDays]);
-}
-
 /** History for the selected location, over any window Open-Meteo accepts (<=92). */
 export function useSelectedHistory(pastDays: number) {
   const { selected } = useAppState();
-  return useAsync<DayAqi[]>(() => fetchDailyAqi(pastDays, selected.location), [
-    pastDays,
-    selected.slug,
-  ]);
+  return useAsync<DayAqi[]>(
+    () => fetchHistorySmart(pastDays, selected.location, selected.slug),
+    [pastDays, selected.slug],
+  );
 }
 
 export type DirectoryEntry = { slug: string; name: string; aqi: number };
@@ -129,7 +125,7 @@ export function useLocationDirectory() {
         ALL_LOCATIONS.map(async (entry) => ({
           slug: entry.slug,
           name: entry.name,
-          aqi: await fetchAqiAt(entry.location),
+          aqi: await fetchAqiSmart(entry.location, entry.slug),
         })),
       ),
     [],
@@ -142,11 +138,11 @@ export type PopularLocationReading = {
 };
 
 /** Full reading (AQI + weather + pollutants) for any coordinate pair. */
-export function useLocationAir(location: Coordinates | null) {
+export function useLocationAir(location: Coordinates | null, slug?: string) {
   return useAsync<CurrentReading>(async () => {
     if (!location) throw new Error('Lokasi tidak dikenal');
-    return fetchCurrentReading(location);
-  }, [location?.latitude, location?.longitude]);
+    return fetchAirSmart(location, slug);
+  }, [location?.latitude, location?.longitude, slug]);
 }
 
 /** Real AQI for each popular location (fetched in parallel, one tiny call each). */
@@ -155,7 +151,7 @@ export function usePopularLocations() {
     const readings = await Promise.all(
       POPULAR_LOCATIONS.map(async (entry) => ({
         name: entry.name,
-        aqi: await fetchAqiAt(entry.location),
+        aqi: await fetchAqiSmart(entry.location),
       })),
     );
     return readings;

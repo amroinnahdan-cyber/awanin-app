@@ -43,6 +43,13 @@ export type CurrentReading = {
   /** WMO weather code from the forecast API */
   weatherCode: number;
   pollutants: PollutantReading[];
+  /** Where this value came from; `cache` means offline fallback */
+  source?: 'direct' | 'backend' | 'cache';
+  stale?: boolean;
+  /** ISO timestamp of the cached snapshot when `stale` is true */
+  cachedAt?: string;
+  forecast?: DayAqi[];
+  hourly?: HourlyForecastPoint[];
 };
 
 export type DayAqi = {
@@ -54,6 +61,10 @@ export type DayAqi = {
   /** Daily min */
   min: number;
 };
+
+export type HourlyForecastPoint = { time: string; aqi: number };
+
+export type ForecastBundle = { hourly: HourlyForecastPoint[]; daily: DayAqi[] };
 
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
@@ -264,17 +275,74 @@ export async function fetchDailyAqi(
 }
 
 async function loadDailyAqi(pastDays: number, location: Coordinates): Promise<DayAqi[]> {
+  // `past_days` excludes today and `forecast_days=1` appends it, so 7 + 1 gave
+  // eight bars under a "7 Hari" tab. Shift the window one day back.
+  const span = Math.max(1, Math.round(pastDays));
   const query = new URLSearchParams({
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     timezone: location.timezone,
     hourly: 'us_aqi',
-    past_days: String(pastDays),
+    past_days: String(span - 1),
     forecast_days: '1',
   });
   const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
   const hourly = response.hourly ?? {};
   return groupHourlyByDay(hourly.time ?? [], hourly.us_aqi ?? []);
+}
+
+/**
+ * Future days only: keeps today and the following days, then aggregates the
+ * hourly series with the same reducer used for history. Exported for tests.
+ */
+export function buildDailyForecast(
+  hourly: HourlyForecastPoint[],
+  now = new Date(),
+): DayAqi[] {
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')}`;
+  const future = hourly.filter((point) => point.time.slice(0, 10) >= today);
+  return groupHourlyByDay(
+    future.map((point) => point.time),
+    future.map((point) => point.aqi),
+  ).slice(0, 7);
+}
+
+/**
+ * Seven-day AQI outlook plus the next 48 hourly points, one cached request.
+ * The air-quality API has no `daily` block, so the daily series is aggregated
+ * from `hourly=us_aqi` exactly like the history endpoint.
+ */
+export async function fetchForecastBundle(
+  location: Coordinates = JAKARTA_PUSAT,
+): Promise<ForecastBundle> {
+  return withCache(
+    `forecast:${location.latitude},${location.longitude}`,
+    10 * 60_000,
+    () => loadForecastBundle(location),
+  );
+}
+
+async function loadForecastBundle(location: Coordinates): Promise<ForecastBundle> {
+  const query = new URLSearchParams({
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    timezone: location.timezone,
+    hourly: 'us_aqi',
+    forecast_days: '7',
+  });
+  const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
+  const times = response.hourly?.time ?? [];
+  const values = response.hourly?.us_aqi ?? [];
+  const hourly: HourlyForecastPoint[] = [];
+  for (let i = 0; i < times.length; i += 1) {
+    const time = times[i];
+    const value = values[i];
+    if (!time || typeof value !== 'number' || !Number.isFinite(value)) continue;
+    hourly.push({ time, aqi: value });
+  }
+  return { hourly, daily: buildDailyForecast(hourly) };
 }
 
 /** Attribution required by the Open-Meteo licence. */

@@ -1,27 +1,81 @@
-# Awanin — mobile app (Expo / React Native)
+# Awanin — air quality app (Expo + Node API)
 
 **Know Your Air** — aplikasi kualitas udara untuk Jakarta Pusat, dibangun dari file Figma
-**Awanin Mobile App** (canvas `Hi-Fi`, node `3:2`).
+**Awanin Mobile App** (canvas `Hi-Fi`, node `3:2`), dengan backend sendiri untuk cache,
+riwayat, dan push notification.
+
+| Bagian | Teknologi | Lokasi |
+|---|---|---|
+| Aplikasi | Expo 58 / React Native 0.88 / Expo Router | `src/` |
+| Backend | Node 22+ / Express 4 / SQLite (`node:sqlite`) / zod | [`server/`](server) |
+| Data | Open-Meteo Air Quality & Weather (tanpa API key) | upstream |
+
+## Arsitektur
+
+```
+┌──────────────────────┐        HTTPS/JSON        ┌──────────────────────────┐
+│  Awanin app (Expo)   │ ───────────────────────▶ │  awanin-server           │
+│  Beranda · Peta      │ ◀─────────────────────── │  Express + SQLite        │
+│  Riwayat · Profil    │   reading, forecast,     │  cache · device registry │
+│  Notifikasi          │   history, subscription  │  scheduler · Expo push   │
+└─────────┬────────────┘                          └────────────┬─────────────┘
+          │                                                    │
+          │ fallback langsung (backend mati / belum diset)     │ 1 request / 10 menit
+          ▼                                                    ▼
+   Open-Meteo Air Quality + Weather API  ◀──────────────────────┘
+```
+
+Aplikasi memilih sumber data secara berurutan lewat [`src/api/gateway.ts`](src/api/gateway.ts):
+
+1. **Backend** — data bersama, riwayat, prakiraan, dan langganan push;
+2. **Open-Meteo langsung** — kalau backend tidak dikonfigurasi atau sedang mati,
+   aplikasi tetap berfungsi penuh tanpa server;
+3. **Cache perangkat** — bacaan terakhir yang tersimpan, ditandai `stale` beserta
+   umurnya, bukan kartu error.
 
 ## Menjalankan
 
 ```bash
+# 1. Backend
+cd server
+npm install
+cp .env.example .env     # opsional, semua nilai punya default
+npm run dev              # http://localhost:4000  (docs: /docs)
+
+# 2. Aplikasi (terminal lain)
 cd awanin-app
-npm install          # atau: npx expo install
-npx expo start       # tekan w / a / i, atau pakai Expo Go
+npm install
+cp .env.example .env     # EXPO_PUBLIC_API_URL=http://localhost:4000
+npx expo start           # tekan w / a / i, atau Expo Go
 ```
 
-Pemeriksaan:
+`npm run api` dari folder aplikasi menjalankan backend tanpa pindah direktori.
+
+Catatan URL backend:
+
+| Menjalankan di | `EXPO_PUBLIC_API_URL` |
+|---|---|
+| Web / iOS simulator | `http://localhost:4000` |
+| Emulator Android | `http://10.0.2.2:4000` |
+| HP fisik (Expo Go) | `http://<IP-LAN-komputer>:4000` |
+
+Tanpa variabel itu aplikasi berjalan dalam **direct mode**: semua request ke
+Open-Meteo, push dinonaktifkan, dan tidak ada cache bersama.
+
+### Pemeriksaan
 
 ```bash
-npm install          # WAJIB dulu — lint memakai eslint lokal dari node_modules
-npm run lint         # = npx eslint .
-npx tsc --noEmit     # typecheck
+npm run lint         # eslint .
+npm run typecheck    # tsc --noEmit
+npm test             # jest (17 tes)
+npm run check        # ketiganya sekaligus
+
+cd server
+npm run typecheck && npm test   # node:test + supertest (23 tes)
 ```
 
-> `npx expo lint` / `npx eslint .` tanpa `npm install` menarik ESLint dari registry
-> dengan versi berbeda yang menolak `eslint/config`, jadi script `lint` sekarang
-> langsung memanggil `eslint .` dengan dependensi lokal.
+CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) menjalankan
+lint, typecheck, tes aplikasi, lalu typecheck, tes, dan build backend pada setiap push.
 
 ## Delapan layar (seluruh canvas Hi-Fi)
 
@@ -39,12 +93,59 @@ npx tsc --noEmit     # typecheck
 Navigasi memakai Expo Router (`src/app/`) dengan bottom nav kustom yang mengikuti
 geometri Figma: 12 top + 41 item + 18 gap + 4 home indicator + 7 bottom = 82.
 
-Alur yang sudah tersambung: bell di Beranda → Notifikasi, kartu Lokasi Populer → Detail
+Alur yang tersambung: bell di Beranda → Notifikasi, kartu Lokasi Populer → Detail
 Lokasi, kartu pratinjau lokasi di Peta → Detail Lokasi, tombol "Lihat Rute" di Detail →
 Peta, dan kartu "Rekomendasi" di Detail → Tips Kesehatan.
 
 Splash mengikuti prototype Figma: latar `#d9eeff`, transisi 300ms ease-out, dan bisa
-diketuk untuk langsung masuk. Isinya memakai logo asli Awanin, bukan lagi ikon pengganti.
+diketuk untuk langsung masuk. Isinya memakai logo asli Awanin, bukan ikon pengganti.
+Kunjungan pertama menampilkan onboarding singkat yang bisa dilewati.
+
+## Backend
+
+Ringkasan lengkap ada di [`server/README.md`](server/README.md) dan referensi
+interaktif di `http://localhost:4000/docs` (spesifikasi OpenAPI 3.1:
+`/openapi.json`, sumbernya [`server/src/openapi.ts`](server/src/openapi.ts)).
+
+| Metode | Endpoint | Dipakai aplikasi untuk |
+|---|---|---|
+| `GET` | `/v1/air?lat&lon` | Beranda, Peta, Detail Lokasi |
+| `GET` | `/v1/air/:slug/history?days=7\|30` | Riwayat |
+| `GET` | `/v1/locations` | AQI semua kawasan |
+| `POST/PATCH/DELETE` | `/v1/devices` | Registrasi token push & preferensi |
+| `POST` | `/v1/devices/:id/test` | Tombol "Uji notifikasi" |
+| `GET` | `/v1/devices/:id/notifications` | Feed notifikasi dari server |
+
+Yang dikerjakan server:
+
+- **Cache bersama.** Snapshot Open-Meteo disimpan 10 menit (riwayat 15 menit), jadi
+  satu polling melayani semua pengguna alih-alih satu request per layar.
+- **Fallback jujur.** Kalau upstream gagal, snapshot terakhir dikirim dengan
+  `stale: true`; aplikasi menampilkan badge "data tersimpan".
+- **Riwayat.** Satu baris per bucket 15 menit pada tabel `readings`, dipakai endpoint
+  tren dan dievaluasi scheduler.
+- **Push alert.** Scheduler 15 menit membandingkan kategori AQI tiap lokasi dengan
+  preferensi perangkat: hanya kirim saat **kategori berubah**, menghormati ambang,
+  jam tenang (default 22:00–06:00 WIB), dan cooldown 180 menit.
+- **Hardening.** Helmet, CORS allow-list, rate limit 180 req/menit, batas body 16 kB,
+  validasi zod, dan error JSON seragam (`{ error, code }`).
+
+Push notification tingkat OS membutuhkan **development build / build produksi**
+(Expo Go tidak lagi mendukung remote push) dan token `ExponentPushToken[...]`.
+Di web aplikasi mendeteksi keterbatasan ini dan menampilkan "Push jarak jauh belum
+didukung di web" tanpa mengganggu notifikasi dalam aplikasi.
+
+### Menguji backend dengan cepat
+
+```bash
+curl http://localhost:4000/health
+curl "http://localhost:4000/v1/air?lat=-6.1754&lon=106.8272"
+curl "http://localhost:4000/v1/air/monas/history?days=7"
+
+curl -X POST http://localhost:4000/v1/devices \
+  -H 'content-type: application/json' \
+  -d '{"deviceId":"android:demo-0001","platform":"android"}'
+```
 
 ## Logo & ikon aplikasi
 
@@ -107,7 +208,13 @@ indeks 0 berarti tidak ada layar sebelumnya, jadi ia `replace` ke parent yang pa
 - Riwayat: `hourly=us_aqi&past_days=7|30`, diagregasi menjadi rata-rata/maks/min harian
 
 Data Open-Meteo untuk Jakarta berasal dari model global CAMS (~45 km, 3-jaman),
-bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
+bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib — ditampilkan
+di footer Beranda.
+
+Open-Meteo hanya menerbitkan prakiraan AQI **lima hari**; hari keenam dan ketujuh
+dikirim sebagai `null`. Backend membuang sampel kosong tersebut (bukan mengubahnya
+menjadi AQI 0) dan strip prakiraan menyesuaikan judulnya dengan jumlah hari yang
+tersedia, sehingga tidak ada lagi dua batang "0" di ujung grafik.
 
 ## Penyimpangan yang disengaja dari Figma
 
@@ -122,8 +229,7 @@ bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
    menabrak busur.
 3. **Ring tetap 174px** — sempat saya ubah ke 182px berdasarkan screenshot ber-zoom,
    lalu dikembalikan setelah diukur ulang dari export 1:1 (`beranda.png`): radius luar
-   busur 86,9px, jadi 174px. Semua temuan ukuran lain dari screenshot itu juga
-   dinyatakan batal.
+   busur 86,9px, jadi 174px.
 4. **Label badge 12 bold dengan padding 10px**, bukan 13 bold / 12px: dengan begitu
    badge terlebar (154px teks + 20px padding = 174px) tidak pernah melebihi lebar ring
    yang dilabelinya, dan label tetap satu baris.
@@ -146,18 +252,16 @@ bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
    ini yang membuat gauge terasa "kurang": export punya bidang datar `#fcfcff`
    bertepi lembut, x 130..265 dan dari sedikit di atas pusat ring sampai melewati tepi
    bawah kartu, sehingga teks di bawah gauge duduk di atas putih, bukan di atas langit.
-   Geometrinya memakai persentase dan sudah dicocokkan: kotak datarnya sekarang
-   x 127..264, y 173..434 (hero 390×322) versus 130..265, 176..374 di export.
 10. **Kontras & target sentuh** lain sengaja dibiarkan sesuai desain agar tetap setia.
 11. **Skala ring AQI dibuat piecewise, bukan linear 0–500.** Pemetaan linear membuat
     bacaan sehari-hari (AQI 40–90) cuma mengisi 8–18% busur sehingga ring terasa
-    kosong. `gaugeProgress()` kini memetakan batas kategori ke posisi busur tetap
+    kosong. `gaugeProgress()` memetakan batas kategori ke posisi busur tetap
     (50 → 30%, 100 → 50%, 150 → 66%, 200 → 78%, 300 → 90%, 500 → 100%): rentang
     0–100 mendapat dua pertiga ruang visual. Legenda skala di bawahnya tetap linear
     berlabel angka, karena sumbu berlabel harus jujur.
-12. **Profil memakai data contoh netral** (`USER_PROFILE` di `src/state/app.ts`):
-    "Pengguna Awanin" / inisial "PA". Tidak ada sistem akun, dan menanam nama asli
-    di dalam bundle adalah kebocoran privasi.
+12. **Profil memakai data contoh lokal** (`USER_PROFILE` di `src/state/app.ts`).
+    Tidak ada sistem akun: identitas ini hanya tampilan dan bisa diganti tanpa
+    menyentuh backend, karena `deviceId` anonim yang dipakai untuk push.
 
 ## Catatan implementasi yang mudah terlewat
 
@@ -169,31 +273,29 @@ bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib.
 - **Permintaan API di-cache.** Satu mount layar sebelumnya menembak enam request
   (pembacaan saat ini, cuaca, empat lokasi populer) dan beberapa kali reload sudah cukup
   memicu HTTP 429 dari Open-Meteo. Sekarang ada TTL cache in-memory: 5 menit untuk
-  pembacaan saat ini & AQI per lokasi, 15 menit untuk seri harian.
+  pembacaan saat ini & AQI per lokasi, 15 menit untuk seri harian, ditambah cache
+  perangkat untuk kondisi offline.
+- **`/v1/air` memakai bucket 15 menit.** Request berulang dari banyak pengguna
+  menulis satu baris `readings`, bukan satu baris per request.
 
-## Notifikasi: bukan data palsu
+## Notifikasi
 
-Tidak ada backend, jadi feed notifikasi **tidak** diisi riwayat karangan. Store
-(`src/state/notifications.ts`) mulai kosong dan hanya mencatat kejadian nyata: perubahan
-kategori AQI yang teramati saat aplikasi berjalan (tampil di kartu "Terbaru" pada layar
-Notifikasi). Layar Notifikasi sendiri mengikuti showcase: **pengaturan** yang
-benar-benar mengendalikan perilaku —
+Dua lapis, keduanya nyata:
 
-- **Peringatan Kualitas Udara** — sakelar induk untuk semua peringatan.
-- **Peringatan AQI Tinggi** — feed perubahan kategori (baseline tetap dilacak, jadi
-  menyalakan ulang tidak mengulang perubahan lama).
-- **Tips Kesehatan** — menyertakan tips singkat di badan tiap notifikasi.
-- **Update Cuaca** — ringkasan harian (AQI + cuaca), sekali per hari.
-- **Lokasi Notifikasi** — mengikuti lokasi yang dipilih.
+**Dalam aplikasi** (`src/state/notifications.ts`) — feed dimulai kosong dan hanya
+mencatat kejadian yang benar-benar teramati: perubahan kategori AQI saat aplikasi
+berjalan, ringkasan harian, dan hasil push uji. Maksimal 20 entri, disimpan lewat
+AsyncStorage/localStorage (`src/lib/persist.ts`).
 
-Riwayat notifikasi (maksimal 20), baseline kategori, dan pengaturan tersimpan di
-perangkat lewat AsyncStorage (`src/lib/persist.ts`, di web memakai localStorage),
-jadi tidak hilang saat aplikasi ditutup. "Bersihkan" & "Keluar" mengembalikan ke
-kondisi awal.
+**Push jarak jauh** — `src/hooks/useRemoteNotifications.ts` mendaftarkan `deviceId`
+anonim + token Expo ke backend, menyinkronkan preferensi (lokasi, ambang, jam tenang),
+dan membaca riwayat notifikasi server. Server yang memutuskan kapan mengirim, jadi
+alert tetap datang walau aplikasi tertutup (butuh development build, bukan Expo Go).
 
-Push notification tingkat OS (tetap masuk saat aplikasi tertutup) sengaja tidak
-dipasang: itu butuh `expo-notifications` + development build dan untuk notifikasi
-remote butuh backend — di luar jangkauan aplikasi tanpa server ini.
+Pengaturan di layar Notifikasi mengendalikan keduanya: **Peringatan Kualitas Udara**
+(sakelar induk), **Peringatan AQI Tinggi** (feed perubahan kategori), **Tips Kesehatan**
+(sertakan saran di badan notifikasi), **Update Cuaca** (ringkasan harian), dan
+**Lokasi Notifikasi**.
 
 ## Yang masih perkiraan
 
@@ -203,6 +305,12 @@ remote butuh backend — di luar jangkauan aplikasi tanpa server ini.
   marker, sungai ala Ciliwung di sisi timur Monas), tetapi tetap bukan geometri asli.
   Posisi taman, label kawasan, dan marker memakai koordinat dari file.
 
-Pencarian lokasi di Peta **berfungsi**: baris "Cari lokasi..." membuka
-sheet pemilih lokasi yang punya kolom pencarian nyata (filter nama/area, empty state,
-tombol hapus), plus chip filter kategori Semua / Baik / Sedang / Tidak Sehat.
+Pencarian lokasi di Peta **berfungsi**: baris "Cari lokasi..." membuka sheet pemilih
+lokasi yang punya kolom pencarian nyata (filter nama/area, empty state, tombol hapus),
+plus chip filter kategori Semua / Baik / Sedang / Tidak Sehat.
+
+## Lisensi & atribusi
+
+Kode aplikasi: MIT (lihat [`LICENSE`](LICENSE)). Data kualitas udara dan cuaca:
+[Open-Meteo](https://open-meteo.com), lisensi non-komersial — atribusi ditampilkan di
+Beranda dan disertakan pada setiap respons API.
