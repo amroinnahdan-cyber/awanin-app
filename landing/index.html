@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Awanin — Know Your Air | Pantau Kualitas Udara Jakarta</title>
+<meta name="description" content="Awanin adalah aplikasi mobile yang menampilkan kualitas udara Jakarta secara real-time dalam bentuk yang mudah dipahami: ring AQI, waktu terbaik olahraga, riwayat 7–30 hari, dan notifikasi perubahan kategori.">
+<meta name="theme-color" content="#1854c8">
+<meta property="og:title" content="Awanin — Know Your Air">
+<meta property="og:description" content="Kualitas udara Jakarta, dipantau setiap saat. Ring AQI real-time, rekomendasi aktivitas, dan notifikasi perubahan kategori.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/img-splash.jpg">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+  :root {
+    --bg: #f5f9ff;
+    --ink: #153c70;
+    --muted: #596b86;
+    --accent: #1854c8;
+    --accent-dark: #12409c;
+    --surface: #ffffff;
+    --tint: #eaf3ff;
+    --border: #e5edf8;
+    --sky-top: #c6ecfe;
+    --sky-bottom: #eef6ff;
+    --navy: #16324f;
+    --good: #4abc78;
+    --radius: 16px;
+    --gutter: 24px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { max-width: 100%; display: block; }
+
+  a { color: var(--accent); }
+
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 var(--gutter); }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(245, 249, 255, .88);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; }
+  .brand span {
+    font-weight: 800; font-size: 21px; letter-spacing: -.5px; color: var(--accent);
+  }
+  .nav-links { display: flex; align-items: center; gap: 22px; }
+  .nav-links a {
+    color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600;
+  }
+  .nav-links a:hover { color: var(--accent); }
+  .nav-cta {
+    background: var(--accent); color: #fff !important; padding: 9px 18px;
+    border-radius: 999px; font-size: 14px; font-weight: 700; text-decoration: none;
+  }
+  .nav-cta:hover { background: var(--accent-dark); }
+  @media (max-width: 760px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; overflow: hidden; text-align: center;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
+    padding: 84px 0 72px;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    background: url('assets/img-splash.jpg') center 30% / cover no-repeat;
+    opacity: .18;
+  }
+  .hero-inner { position: relative; }
+  .hero .glyph {
+    width: 92px; height: 92px; margin: 0 auto 22px;
+    background: #fff; border-radius: 26px; padding: 14px;
+    box-shadow: 0 10px 30px rgba(40, 91, 160, .18);
+  }
+  .hero h1 {
+    font-size: clamp(38px, 6vw, 58px); font-weight: 800; letter-spacing: -1.2px;
+    line-height: 1.1; color: var(--ink);
+  }
+  .hero p.lead {
+    max-width: 620px; margin: 16px auto 0; font-size: 18px; color: var(--muted);
+  }
+  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 26px; }
+  .chip {
+    background: rgba(255, 255, 255, .8); border: 1px solid var(--border);
+    color: var(--ink); border-radius: 999px; padding: 7px 14px;
+    font-size: 13px; font-weight: 600;
+  }
+  .hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 30px; }
+  .btn {
+    display: inline-block; padding: 13px 26px; border-radius: 12px;
+    font-size: 15px; font-weight: 700; text-decoration: none;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-ghost { background: #fff; color: var(--accent); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); }
+
+  /* ---------- Sections ---------- */
+  section { padding: 68px 0; }
+  .section-title { font-size: 30px; font-weight: 800; letter-spacing: -.6px; text-align: center; }
+  .section-sub { text-align: center; color: var(--muted); max-width: 640px; margin: 12px auto 0; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 36px; }
+  @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 26px;
+  }
+  .card h3 { font-size: 19px; margin-bottom: 10px; }
+  .card p { color: var(--muted); font-size: 15px; }
+  .card .tag {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .8px;
+    text-transform: uppercase; color: var(--accent); background: var(--tint);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 14px;
+  }
+
+  /* ---------- Features ---------- */
+  .features {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px; margin-top: 38px;
+  }
+  .feature {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+  .feature .icon {
+    width: 42px; height: 42px; border-radius: 12px; background: var(--tint);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+  }
+  .feature .icon svg { width: 22px; height: 22px; stroke: var(--accent); }
+  .feature h3 { font-size: 16px; margin-bottom: 6px; }
+  .feature p { font-size: 14px; color: var(--muted); }
+
+  /* ---------- Gallery ---------- */
+  .gallery {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 18px; margin-top: 38px;
+  }
+  figure.shot {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  figure.shot img { width: 100%; height: auto; }
+  figure.shot figcaption {
+    padding: 12px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  /* ---------- Data ---------- */
+  .data-band { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .data-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-top: 34px; }
+  .data-list .card { background: var(--bg); }
+  .data-list code {
+    font-size: 13px; background: var(--tint); border-radius: 6px; padding: 2px 6px;
+    color: var(--accent);
+  }
+
+  /* ---------- Download ---------- */
+  .download-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 36px; }
+  .download-grid > * { min-width: 0; }
+  @media (max-width: 760px) { .download-grid { grid-template-columns: 1fr; } }
+  .download-grid pre {
+    background: var(--navy); color: #d9eeff; border-radius: 12px;
+    padding: 16px; margin-top: 14px; overflow-x: auto;
+    font-size: 13px; line-height: 1.7;
+  }
+  .download-grid .btn { margin-top: 18px; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    background: var(--navy); color: #b9cbe3; padding: 44px 0;
+    font-size: 14px;
+  }
+  footer .foot-inner { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: center; }
+  footer .brand span { color: #fff; }
+  footer a { color: #9cc4ff; }
+  footer p { max-width: 560px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="#top">
+      <img src="assets/logo-mark.png" alt="Glyph awan Awanin">
+      <span>awanin</span>
+    </a>
+    <nav class="nav-links" aria-label="Navigasi utama">
+      <a href="#masalah">Masalah</a>
+      <a href="#fitur">Fitur</a>
+      <a href="#layar">Layar</a>
+      <a href="#data">Data</a>
+      <a class="nav-cta" href="#unduh">Unduh</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container hero-inner">
+      <img class="glyph" src="assets/logo-mark.png" alt="Logo Awanin">
+      <h1>Know Your Air</h1>
+      <p class="lead">
+        Udara Jakarta tidak harus ditebak. Awanin menampilkan kualitas udara
+        secara <strong>real-time</strong> dan menerjemahkannya menjadi keputusan
+        harian: bolehkah lari pagi hari ini? Perlu masker? Kapan udaranya paling bersih?
+      </p>
+      <div class="chips">
+        <span class="chip">Ring AQI real-time</span>
+        <span class="chip">Riwayat 7–30 hari</span>
+        <span class="chip">100 kota se-Indonesia</span>
+        <span class="chip">Notifikasi perubahan kategori</span>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#unduh">Coba Awanin</a>
+        <a class="btn btn-ghost" href="https://github.com/amroinnahdan-cyber/awanin-app" target="_blank" rel="noopener">Lihat kode sumber</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Masalah & Solusi -->
+  <section id="masalah">
+    <div class="container">
+      <h2 class="section-title">Masalahnya bukan udaranya — informasinya</h2>
+      <p class="section-sub">
+        Data kualitas udara tersedia, tapi berupa angka teknis yang tersebar di
+        banyak sumber dan sulit ditafsirkan menjadi tindakan.
+      </p>
+      <div class="two-col">
+        <div class="card">
+          <span class="tag">Masalah</span>
+          <h3>Angka µg/m³ tidak menjawab pertanyaan harian</h3>
+          <p>
+            Warga Jakarta mengambil keputusan setiap hari — berangkat kerja, lari
+            pagi, mengajak anak bermain — tanpa tahu kondisi udara yang mereka
+            hirup. Informasi teknis memang ada, tetapi tidak menjawab pertanyaan
+            sederhana: <em>apakah aman beraktivitas di luar hari ini?</em>
+          </p>
+        </div>
+        <div class="card">
+          <span class="tag">Solusi</span>
+          <h3>Awanin menerjemahkan AQI menjadi aksi</h3>
+          <p>
+            Ring AQI berwarna, saran intensitas olahraga, jendela waktu dengan
+            udara terbaik hari ini, peringatan saat kategori berubah, dan riwayat
+            untuk memilih hari terbaik — semuanya dalam bahasa sehari-hari,
+            bukan bahasa stasiun pengukuran.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fitur -->
+  <section id="fitur">
+    <div class="container">
+      <h2 class="section-title">Fitur utama</h2>
+      <p class="section-sub">Dibangun dengan React Native + Expo, dengan data real-time dari Open-Meteo.</p>
+      <div class="features">
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 12 16 8"/></svg></div>
+          <h3>Ring AQI</h3>
+          <p>Angka AQI dengan kategori berwarna (Baik → Berbahaya), PM2.5, PM10, dan kondisi cuaca dalam satu layar.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Waktu terbaik olahraga</h3>
+          <p>Jendela dua jam dengan AQI terendah yang masih tersisa hari ini, plus saran intensitas olahraga.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
+          <h3>Sekitar</h3>
+          <p>Lokasi terpantau diurutkan berdasarkan jarak sebenarnya dari posisi perangkat Anda.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 19V5"/><path d="M4 15l4-4 4 3 6-7"/></svg></div>
+          <h3>Riwayat 7–30 hari</h3>
+          <p>Rata-rata, tertinggi, dan terendah per hari — untuk melihat pola dan memilih hari terbaik beraktivitas.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20H2"/></svg></div>
+          <h3>Peringkat nasional</h3>
+          <p>100 kota di 38 provinsi dalam satu layar, lengkap dengan perubahan AQI 24 jam dan pencarian kota.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg></div>
+          <h3>Notifikasi cerdas</h3>
+          <p>Peringatan hanya saat kategori AQI berubah — dengan ambang, jam tenang, dan cooldown yang bisa diatur.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z"/><path d="M9.5 10h5"/><path d="M12 7.5v5"/></svg></div>
+          <h3>Tips kesehatan</h3>
+          <p>Saran praktis menghadapi polusi: masker, aktivitas luar ruangan, sirkulasi udara, dan pola makan.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Tetap jalan saat sinyal buruk</h3>
+          <p>Bacaan terakhir tersimpan di perangkat dan ditandai "data tersimpan", bukan layar error.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Galeri layar -->
+  <section id="layar" class="data-band">
+    <div class="container">
+      <h2 class="section-title">Delapan layar, satu bahasa visual</h2>
+      <p class="section-sub">
+        Dirancang di Figma dengan palet biru langit yang konsisten — dari splash
+        sampai detail lokasi.
+      </p>
+      <div class="gallery">
+        <figure class="shot">
+          <img src="assets/screen-beranda.png" alt="Layar Beranda Awanin: ring AQI, polutan, dan kartu udara terbaik dan terburuk" loading="lazy">
+          <figcaption>Beranda — AQI hari ini</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screen-riwayat.png" alt="Layar Riwayat Awanin: grafik tren AQI 7 dan 30 hari" loading="lazy">
+          <figcaption>Riwayat — tren 7/30 hari</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screen-detail.png" alt="Layar Detail Lokasi Awanin: ring AQI Monas dengan polutan dan rekomendasi" loading="lazy">
+          <figcaption>Detail Lokasi — per kawasan</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screen-notifikasi.png" alt="Layar Notifikasi Awanin: pengaturan peringatan dan feed kejadian" loading="lazy">
+          <figcaption>Notifikasi — peringatan AQI</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/screen-tips.png" alt="Layar Tips Kesehatan Awanin dengan maskot awan" loading="lazy">
+          <figcaption>Tips Kesehatan</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data & transparansi -->
+  <section id="data">
+    <div class="container">
+      <h2 class="section-title">Dari mana datanya?</h2>
+      <p class="section-sub">Jujur soal sumber, batasan, dan lisensinya.</p>
+      <div class="data-list">
+        <div class="card">
+          <h3>Open-Meteo</h3>
+          <p>
+            Public API gratis tanpa API key: <code>air-quality-api.open-meteo.com</code>
+            untuk AQI, PM2.5, PM10, NO₂, O₃; <code>api.open-meteo.com</code> untuk cuaca.
+            Lisensi non-komersial dengan atribusi wajib — ditampilkan di aplikasi ini.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Catatan batasan</h3>
+          <p>
+            Data Jakarta berasal dari model global CAMS (resolusi ~45 km, diperbarui
+            per 3 jam), bukan stasiun pengukuran lokal — cukup untuk gambaran umum
+            kawasan. Prakiraan AQI tersedia lima hari.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Backend & cache</h3>
+          <p>
+            Aplikasi memakai backend sendiri (Express + SQLite) untuk cache 10 menit,
+            riwayat pembacaan, dan push notification. Bila backend mati, aplikasi
+            otomatis jatuh ke Open-Meteo langsung, lalu cache perangkat.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Daftar kota nasional</h3>
+          <p>
+            100 kota dari 38 provinsi berasal dari basis data
+            <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>
+            (CC BY 4.0), dikurangi menjadi ibu kota dan kota terbesar per provinsi.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Unduh -->
+  <section id="unduh" class="data-band">
+    <div class="container">
+      <h2 class="section-title">Coba Awanin</h2>
+      <p class="section-sub">Dua cara menjalankannya hari ini.</p>
+      <div class="download-grid">
+        <div class="card">
+          <span class="tag">APK Android</span>
+          <h3>Build instalasi sedang disiapkan</h3>
+          <p>
+            APK Awanin (build produksi) sedang dikompilasi lewat EAS dan akan
+            ditempatkan di halaman rilis repositori. Pantau tautan berikut:
+          </p>
+          <a class="btn btn-primary" href="https://github.com/amroinnahdan-cyber/awanin-app/releases" target="_blank" rel="noopener">Buka halaman rilis</a>
+        </div>
+        <div class="card">
+          <span class="tag">Jalankan dari kode</span>
+          <h3>Lewat Expo Go</h3>
+          <p>Butuh Node.js 18+ dan aplikasi Expo Go di ponsel Anda:</p>
+          <pre aria-label="Perintah menjalankan Awanin">git clone https://github.com/amroinnahdan-cyber/awanin-app.git
+cd awanin-app
+npm install
+npx expo start   # pindai QR dengan Expo Go</pre>
+          <a class="btn btn-ghost" href="https://github.com/amroinnahdan-cyber/awanin-app#menjalankan" target="_blank" rel="noopener">Baca panduan lengkap</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container foot-inner">
+    <div>
+      <a class="brand" href="#top" style="margin-bottom:10px">
+        <img src="assets/logo-mark.png" alt="" width="26" height="26">
+        <span>awanin</span>
+      </a>
+      <p>
+        Know Your Air — aplikasi pemantau kualitas udara Jakarta.
+        Dibangun dengan React Native + Expo.
+        Data kualitas udara &amp; cuaca oleh
+        <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>;
+        data kota oleh <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>.
+        Kode aplikasi berlisensi MIT.
+      </p>
+    </div>
+    <p>
+      <a href="https://github.com/amroinnahdan-cyber/awanin-app" target="_blank" rel="noopener">GitHub</a> ·
+      <a href="https://www.figma.com/design/qg87nqVQubJ418Rjw5zN1g/Awanin-Mobile-App?node-id=3-2" target="_blank" rel="noopener">Desain Figma</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

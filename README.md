@@ -220,6 +220,14 @@ curl -X POST http://localhost:4000/v1/devices \
   -d '{"deviceId":"android:demo-0001","platform":"android"}'
 ```
 
+## Landing page
+
+Website publik produk ada di [`landing/`](landing) — satu berkas statis
+(`landing/index.html`, tanpa build step) berisi hero, fitur, galeri layar Figma,
+bagian data & atribusi, dan tautan unduhan. Menjalankan: buka filenya langsung
+atau `cd landing && python -m http.server 8123`. Bisa dipublikasikan apa adanya
+ke GitHub Pages / Netlify / Cloudflare Pages (lihat [`landing/README.md`](landing/README.md)).
+
 ## Logo & ikon aplikasi
 
 Logo sumber (biru datar di atas `#f8f7f5`) diolah oleh
