@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChartNoAxesCombined,
   House,
-  Map,
+  Locate,
   UserRound,
   type LucideProps,
 } from 'lucide-react-native';
@@ -17,7 +17,7 @@ type IconProps = Pick<LucideProps, 'size' | 'color'>;
 
 const TAB_ICONS: Record<string, (props: IconProps) => ReactNode> = {
   index: ({ size, color }) => <House size={size} color={color} strokeWidth={2} />,
-  peta: ({ size, color }) => <Map size={size} color={color} strokeWidth={2} />,
+  sekitar: ({ size, color }) => <Locate size={size} color={color} strokeWidth={2} />,
   riwayat: ({ size, color }) => (
     <ChartNoAxesCombined size={size} color={color} strokeWidth={2} />
   ),
@@ -26,14 +26,14 @@ const TAB_ICONS: Record<string, (props: IconProps) => ReactNode> = {
 
 const TAB_LABELS: Record<string, string> = {
   index: 'Beranda',
-  peta: 'Peta',
+  sekitar: 'Sekitar',
   riwayat: 'Riwayat',
   profil: 'Profil',
 };
 
 const TAB_HREFS: Record<string, Href> = {
   index: '/',
-  peta: '/peta',
+  sekitar: '/sekitar',
   riwayat: '/riwayat',
   profil: '/profil',
 };

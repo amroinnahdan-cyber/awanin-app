@@ -35,7 +35,11 @@ const KNOWN_SLUGS = new Set([
 ]);
 
 function cacheKeyFor(slug: string | undefined, location: Coordinates): string {
-  if (slug && slug.length > 0) return slug;
+  // Only the five monitored points have a stable slug. A custom GPS position
+  // shares the `lokasi-saya` slug across every place the user has stood, so its
+  // offline cache key must include the coordinates or a later fix would be
+  // served the reading from an earlier one.
+  if (slug && KNOWN_SLUGS.has(slug)) return slug;
   return `${location.latitude.toFixed(3)},${location.longitude.toFixed(3)}`;
 }
 

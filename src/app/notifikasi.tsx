@@ -17,6 +17,7 @@ import { sendTestNotification, syncPushSubscription } from '@/lib/subscription';
 import {
   clearNotificationCache,
   markAllRead,
+  markRead,
   useNotifications,
 } from '@/state/notifications';
 import { updateSettings, useAppState } from '@/state/app';
@@ -159,12 +160,15 @@ export default function NotifikasiScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${entry.title}. Buka ${entry.place}`}
-                  onPress={() =>
+                  onPress={() => {
+                    // Opening a notification is reading it: without this the
+                    // Beranda badge stayed lit until "Tandai dibaca".
+                    markRead(entry.id);
                     router.push({
                       pathname: '/lokasi/[slug]',
                       params: { slug: locationSlug(entry.place) },
-                    })
-                  }
+                    });
+                  }}
                   style={({ pressed }) => [styles.feedItem, pressed && styles.pressed]}
                 >
                   <View

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { Coordinates, CurrentReading, DayAqi } from '@/api/openMeteo';
 import {
-  POPULAR_LOCATIONS,
-  type Coordinates,
-  type CurrentReading,
-  type DayAqi,
-} from '@/api/openMeteo';
+  fetchCityTrends,
+  fetchIndonesiaAqi,
+  type IndonesiaReading,
+} from '@/api/indonesia';
+import type { AqiTrend, TrendPoint } from '@/lib/indonesia';
 import { fetchAirSmart, fetchAqiSmart, fetchHistorySmart } from '@/api/gateway';
 import { ALL_LOCATIONS, useAppState } from '@/state/app';
 import { recordReading } from '@/state/notifications';
@@ -28,7 +29,12 @@ function useAsync<T>(
 
   const reload = useCallback(async () => {
     try {
-      setRefreshing(true);
+      if (alive.current) {
+        setRefreshing(true);
+        // A new request supersedes the previous failure: leaving the old error
+        // on screen next to a spinner claims the retry already failed.
+        setState((previous) => ({ ...previous, error: null }));
+      }
       const data = await runRef.current();
       if (alive.current) setState({ data, loading: false, error: null });
     } catch (error) {
@@ -96,6 +102,8 @@ export function useSelectedAir() {
     return reading;
   }, [
     selected.slug,
+    selected.location.latitude,
+    selected.location.longitude,
     settings.notifMaster,
     settings.badAirAlerts,
     settings.weatherUpdate,
@@ -108,7 +116,7 @@ export function useSelectedHistory(pastDays: number) {
   const { selected } = useAppState();
   return useAsync<DayAqi[]>(
     () => fetchHistorySmart(pastDays, selected.location, selected.slug),
-    [pastDays, selected.slug],
+    [pastDays, selected.slug, selected.location.latitude, selected.location.longitude],
   );
 }
 
@@ -132,11 +140,6 @@ export function useLocationDirectory() {
   );
 }
 
-export type PopularLocationReading = {
-  name: string;
-  aqi: number;
-};
-
 /** Full reading (AQI + weather + pollutants) for any coordinate pair. */
 export function useLocationAir(location: Coordinates | null, slug?: string) {
   return useAsync<CurrentReading>(async () => {
@@ -145,15 +148,25 @@ export function useLocationAir(location: Coordinates | null, slug?: string) {
   }, [location?.latitude, location?.longitude, slug]);
 }
 
-/** Real AQI for each popular location (fetched in parallel, one tiny call each). */
-export function usePopularLocations() {
-  return useAsync<PopularLocationReading[]>(async () => {
-    const readings = await Promise.all(
-      POPULAR_LOCATIONS.map(async (entry) => ({
-        name: entry.name,
-        aqi: await fetchAqiSmart(entry.location),
-      })),
-    );
-    return readings;
-  }, []);
+/**
+ * Nationwide ranking for the Beranda card. It shares `fetchIndonesiaAqi`'s
+ * ten-minute cache with the Indonesia screen, so opening one after the other
+ * costs a single request.
+ */
+export function useIndonesiaRanking() {
+  return useAsync<IndonesiaReading>(() => fetchIndonesiaAqi(), []);
+}
+
+/**
+ * 24-hour AQI change for any list of points — the six on the Beranda card, one
+ * detail screen, or every city on the national ranking. Keyed by slug so a new
+ * list triggers one fetch, not one per render; a failure leaves the screen
+ * without deltas instead of replacing it with an error.
+ */
+export function useCityTrends(points: TrendPoint[]) {
+  const key = points.map((point) => point.slug).join(',');
+  return useAsync<Record<string, AqiTrend>>(
+    () => (key ? fetchCityTrends(points) : Promise.resolve({})),
+    [key],
+  );
 }

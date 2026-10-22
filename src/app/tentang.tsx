@@ -1,10 +1,12 @@
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ChevronRight, ExternalLink } from 'lucide-react-native';
 
 import { InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen';
 import { ATTRIBUTION } from '@/api/openMeteo';
+import { INDONESIA_CITIES } from '@/data/indonesiaCities';
+import { openUrl } from '@/lib/share';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
@@ -13,7 +15,7 @@ const FACTS = [
   { label: 'Sumber data', value: 'Open-Meteo' },
   { label: 'Skala indeks', value: 'US AQI (0–500)' },
   { label: 'Backend', value: 'Awanin API (opsional)' },
-  { label: 'Lokasi dipantau', value: '5 titik + GPS' },
+  { label: 'Lokasi dipantau', value: '5 titik + GPS + 100 kota' },
 ];
 
 export default function TentangScreen() {
@@ -53,13 +55,27 @@ export default function TentangScreen() {
           Indeks yang ditampilkan adalah US AQI, skala yang dipakai Open-Meteo untuk parameter
           PM2.5, dengan ambang 50 / 100 / 150 / 200 / 300.
         </InfoParagraph>
+        <InfoParagraph>
+          Layar “Indonesia” membaca {INDONESIA_CITIES.length} kota di 38 provinsi dalam satu
+          permintaan (koordinat dipisah koma) dan menyimpannya 10 menit. Daftar kota berasal dari
+          GeoNames (CC BY 4.0).
+        </InfoParagraph>
         <Pressable
           accessibilityRole="link"
           accessibilityLabel="Buka open-meteo.com"
-          onPress={() => void Linking.openURL('https://open-meteo.com/')}
+          onPress={() => void openUrl('https://open-meteo.com/')}
           style={({ pressed }) => [styles.link, pressed && styles.pressed]}
         >
           <Text style={styles.linkLabel}>open-meteo.com</Text>
+          <ExternalLink size={15} color={colors.accent} strokeWidth={1.8} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Buka geonames.org"
+          onPress={() => void openUrl('https://www.geonames.org/')}
+          style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+        >
+          <Text style={styles.linkLabel}>geonames.org</Text>
           <ExternalLink size={15} color={colors.accent} strokeWidth={1.8} />
         </Pressable>
       </InfoSection>

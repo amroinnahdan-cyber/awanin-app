@@ -1,35 +1,24 @@
-import { useState } from 'react';
-import {
-  Image,
-  Pressable,
-  RefreshControl,
-  Share,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { useMemo, useState } from 'react';
+import { Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Bell, ChevronDown, ChevronRight, MapPin, Share2, Wind } from 'lucide-react-native';
+import { Bell, Check, ChevronDown, ChevronRight, MapPin, Share2, Wind } from 'lucide-react-native';
 
-import { locationSlug, type PollutantReading } from '@/api/openMeteo';
+import type { PollutantReading } from '@/api/openMeteo';
+import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { AqiRing } from '@/components/AqiRing';
+import { BestTimeCard } from '@/components/BestTimeCard';
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { ForecastStrip } from '@/components/ForecastStrip';
 import { LocationSheet } from '@/components/LocationSheet';
+import { NationalExtremesCard } from '@/components/NationalExtremesCard';
 import { FadeIn } from '@/components/motion';
-import {
-  Card,
-  HeroGlow,
-  InlineError,
-  SectionTitle,
-  Skeleton,
-  StaleBadge,
-} from '@/components/ui';
-import { usePopularLocations, useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
+import { Card, HeroGlow, InlineError, Skeleton, StaleBadge } from '@/components/ui';
+import { useIndonesiaRanking, useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
+import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
 import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
-import { placeImage } from '@/lib/placeImages';
+import { buildRows } from '@/lib/indonesia';
 import { useAppState } from '@/state/app';
 import { useNotifications } from '@/state/notifications';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
@@ -47,48 +36,25 @@ function PollutantValue({ pollutant }: { pollutant: PollutantReading | undefined
   );
 }
 
-function PopularCard({ name, aqi, loading }: { name: string; aqi: number; loading: boolean }) {
-  const styles = useThemedStyles(createStyles);
-  const { colors } = useTheme();
-  const category = categoryFor(aqi);
-  const image = placeImage(locationSlug(name));
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Detail ${name}, AQI ${aqi}`}
-      style={({ pressed }) => [styles.popular, pressed && styles.pressed]}
-      onPress={() =>
-        router.push({ pathname: '/lokasi/[slug]', params: { slug: locationSlug(name) } })
-      }
-    >
-      {image ? (
-        <Image source={image} style={styles.popularPhoto} />
-      ) : (
-        <LinearGradient colors={[colors.sky, colors.tint]} style={styles.popularPhoto} />
-      )}
-      <Text style={styles.popularName} numberOfLines={1}>
-        {name}
-      </Text>
-      {loading ? (
-        <Skeleton width={44} height={12} />
-      ) : (
-        <Text style={[styles.popularValue, { color: category.color }]}>{aqi} AQI</Text>
-      )}
-    </Pressable>
-  );
-}
-
 export default function BerandaScreen() {
   const topInset = useTopInset();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const air = useSelectedAir();
-  const popular = usePopularLocations();
+  const national = useIndonesiaRanking();
   const history = useSelectedHistory(2);
   const { selected } = useAppState();
   const notifications = useNotifications();
+  const { state: shareState, share } = useShare();
   const [pickerOpen, setPickerOpen] = useState(false);
   const unread = notifications.filter((entry) => !entry.read).length;
+
+  // Same ten-minute Open-Meteo batch the Indonesia screen uses, so the card and
+  // the full ranking can never disagree.
+  const nationalRows = useMemo(
+    () => buildRows(national.data?.readings ?? [], INDONESIA_CITIES),
+    [national.data],
+  );
 
   const reading = air.data;
   const aqi = reading?.aqi ?? 0;
@@ -111,7 +77,7 @@ export default function BerandaScreen() {
     const message = reading
       ? `AQI ${selected.name} sekarang ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
       : `Awanin — pantau kualitas udara Jakarta setiap saat.`;
-    void Share.share({ message });
+    void share(message);
   };
 
   return (
@@ -121,7 +87,10 @@ export default function BerandaScreen() {
       refreshControl={
         <RefreshControl
           refreshing={air.refreshing}
-          onRefresh={() => void air.reload()}
+          onRefresh={() => {
+            void air.reload();
+            void national.reload();
+          }}
           tintColor={colors.accent}
           colors={[colors.accent]}
         />
@@ -143,12 +112,22 @@ export default function BerandaScreen() {
         <View style={styles.headerActions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Bagikan kualitas udara"
+            accessibilityLabel={
+              shareState === 'copied'
+                ? 'Teks sudah tersalin ke clipboard'
+                : shareState === 'failed'
+                  ? 'Gagal membagikan'
+                  : 'Bagikan kualitas udara'
+            }
             hitSlop={12}
             onPress={shareReading}
             style={({ pressed }) => [pressed && styles.pressed]}
           >
-            <Share2 size={20} color={colors.accent} strokeWidth={1.8} />
+            {shareState === 'copied' ? (
+              <Check size={20} color={colors.good} strokeWidth={2.2} />
+            ) : (
+              <Share2 size={20} color={colors.accent} strokeWidth={1.8} />
+            )}
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -230,6 +209,16 @@ export default function BerandaScreen() {
           <ForecastStrip days={reading?.forecast} loading={air.loading} />
         </FadeIn>
 
+        <FadeIn delay={65}>
+          <BestTimeCard
+            // A cached snapshot's "now" is hours old, so its remaining-hours
+            // advice would point at a window that has already passed.
+            hourly={reading?.stale ? undefined : reading?.hourly}
+            observedAt={reading?.observedAt}
+            loading={air.loading}
+          />
+        </FadeIn>
+
         <FadeIn delay={90}>
           <Pressable
             accessibilityRole="button"
@@ -250,27 +239,15 @@ export default function BerandaScreen() {
           </Pressable>
         </FadeIn>
 
-        <FadeIn delay={140} style={styles.popularBlock}>
-          <SectionTitle
-            title="Lokasi Populer"
-            action="Lihat semua"
-            onAction={() => router.push('/peta')}
+        <FadeIn delay={140}>
+          <NationalExtremesCard
+            rows={nationalRows}
+            fetchedAt={national.data?.fetchedAt ?? null}
+            loading={national.loading}
+            error={national.error}
+            selectedSlug={selected.slug}
+            onRetry={() => void national.reload()}
           />
-
-          <View style={styles.popularRow}>
-            {popular.error && !popular.data ? (
-              <InlineError message={popular.error} onRetry={() => void popular.reload()} />
-            ) : (
-              (popular.data ?? popularFallback).map((entry) => (
-                <PopularCard
-                  key={entry.name}
-                  name={entry.name}
-                  aqi={entry.aqi}
-                  loading={!popular.data}
-                />
-              ))
-            )}
-          </View>
         </FadeIn>
 
         <Pressable
@@ -288,14 +265,6 @@ export default function BerandaScreen() {
     </ScrollView>
   );
 }
-
-/** Shown only while the four popular-location reads are in flight. */
-const popularFallback = [
-  { name: 'Monas', aqi: 0 },
-  { name: 'Bundaran HI', aqi: 0 },
-  { name: 'GBK', aqi: 0 },
-  { name: 'Kota Tua', aqi: 0 },
-];
 
 function createStyles(colors: ThemeColors) {
   return {
@@ -445,36 +414,6 @@ function createStyles(colors: ThemeColors) {
     compareSubtitle: {
       ...typo.caption,
       color: colors.mutedText,
-    },
-    popularBlock: {
-      gap: spacing.section,
-    },
-    popularRow: {
-      flexDirection: 'row' as const,
-      gap: 10,
-      justifyContent: 'space-between' as const,
-    },
-    popular: {
-      width: 80,
-      gap: 5,
-      alignItems: 'center' as const,
-    },
-    popularPhoto: {
-      width: 80,
-      height: 80,
-      borderRadius: radius.control,
-    },
-    popularName: {
-      ...typo.caption,
-      fontFamily: font.bold,
-      color: colors.ink,
-      maxWidth: 80,
-      textAlign: 'center' as const,
-    },
-    popularValue: {
-      ...typo.caption,
-      fontFamily: font.bold,
-      fontSize: 11,
     },
     cardPressed: {
       opacity: 0.75,

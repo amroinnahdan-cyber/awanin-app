@@ -1,21 +1,14 @@
-import {
-  ImageBackground,
-  Linking,
-  Pressable,
-  ScrollView,
-  Share,
-  Text,
-  View,
-} from 'react-native';
+import { ImageBackground, Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
+  Check,
   CloudSun,
   ExternalLink,
   HeartPulse,
+  Locate,
   MapPin,
-  Navigation,
   Share2,
   Star,
 } from 'lucide-react-native';
@@ -23,10 +16,13 @@ import {
 import { weatherLabel } from '@/api/openMeteo';
 import { AqiRing } from '@/components/AqiRing';
 import { ForecastStrip } from '@/components/ForecastStrip';
+import { TrendDelta } from '@/components/TrendDelta';
 import { Card, InlineError, StaleBadge } from '@/components/ui';
-import { useLocationAir } from '@/hooks/useAirQuality';
+import { useCityTrends, useLocationAir } from '@/hooks/useAirQuality';
+import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
 import { formatTemperature } from '@/lib/format';
+import { openUrl } from '@/lib/share';
 import { useBackOrHome } from '@/lib/navigation';
 import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
 import { placeImage } from '@/lib/placeImages';
@@ -43,14 +39,23 @@ export default function DetailLokasiScreen() {
   const topInset = useTopInset();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
-  const goBack = useBackOrHome('/peta');
+  const goBack = useBackOrHome('/sekitar');
   const params = useLocalSearchParams<{ slug?: string }>();
   const slug = typeof params.slug === 'string' ? params.slug : '';
   const { selected, favorites, settings } = useAppState();
+  const { state: shareState, share } = useShare();
 
   const known = findLocation(slug);
   const entry = known ?? (selected.slug === slug ? selected : null);
   const air = useLocationAir(entry ? entry.location : null, slug);
+  // 24-hour change for this one point; skipped while the slug is unknown. The
+  // array is rebuilt each render, but the hook keys on the slug, so that costs
+  // a string join and never a second request.
+  const trendPoints = entry
+    ? [{ slug, latitude: entry.location.latitude, longitude: entry.location.longitude }]
+    : [];
+  const { data: trends } = useCityTrends(trendPoints);
+  const trend = trends?.[slug];
 
   const reading = air.data;
   const aqi = reading?.aqi ?? 0;
@@ -59,17 +64,17 @@ export default function DetailLokasiScreen() {
   const isFavorite = favorites.includes(slug);
   const hero = placeImage(slug);
 
-  const share = () => {
+  const shareReading = () => {
     const message = reading
       ? `${name}: AQI ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
       : `${name} — pantau kualitas udara lewat Awanin.`;
-    void Share.share({ message });
+    void share(message);
   };
 
   const openExternalMap = () => {
     if (!entry) return;
     const { latitude, longitude } = entry.location;
-    void Linking.openURL(
+    void openUrl(
       `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
     );
   };
@@ -101,12 +106,22 @@ export default function DetailLokasiScreen() {
           <View style={styles.heroActionRight}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Bagikan kualitas udara lokasi ini"
+              accessibilityLabel={
+                shareState === 'copied'
+                  ? 'Teks sudah tersalin ke clipboard'
+                  : shareState === 'failed'
+                    ? 'Gagal membagikan'
+                    : 'Bagikan kualitas udara lokasi ini'
+              }
               hitSlop={10}
-              onPress={share}
+              onPress={shareReading}
               style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
             >
-              <Share2 size={18} color={colors.accent} strokeWidth={2} />
+              {shareState === 'copied' ? (
+                <Check size={18} color={colors.good} strokeWidth={2.2} />
+              ) : (
+                <Share2 size={18} color={colors.accent} strokeWidth={2} />
+              )}
             </Pressable>
             {known ? (
               <Pressable
@@ -162,6 +177,7 @@ export default function DetailLokasiScreen() {
                     }}
                     size={148}
                   />
+                  <TrendDelta trend={trend} withWindow large style={styles.ringTrend} />
                 </View>
                 <View style={styles.pollutants}>
                   {(reading?.pollutants ?? PLACEHOLDER_POLLUTANTS).map((pollutant) => (
@@ -235,15 +251,15 @@ export default function DetailLokasiScreen() {
         <View style={styles.footer}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Lihat rute ke ${name} di peta`}
+            accessibilityLabel={`Pakai ${name} dan lihat di layar Sekitar`}
             onPress={() => {
               selectLocation(slug);
-              router.push('/peta');
+              router.push('/sekitar');
             }}
             style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           >
-            <Navigation size={18} color={colors.onAccent} strokeWidth={2} />
-            <Text style={styles.ctaLabel}>Lihat Rute</Text>
+            <Locate size={18} color={colors.onAccent} strokeWidth={2} />
+            <Text style={styles.ctaLabel}>Lihat di Sekitar</Text>
           </Pressable>
         </View>
       ) : null}
@@ -334,6 +350,10 @@ function createStyles(colors: ThemeColors) {
     },
     ringWrap: {
       width: 148,
+      alignItems: 'center' as const,
+    },
+    ringTrend: {
+      marginTop: 4,
     },
     pollutants: {
       flex: 1,

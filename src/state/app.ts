@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { JAKARTA_PUSAT, POPULAR_LOCATIONS, type Coordinates } from '@/api/openMeteo';
+import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { loadPersisted, savePersisted } from '@/lib/persist';
 
 /**
@@ -75,6 +76,8 @@ export type AppSettings = {
 
 type AppState = {
   selected: AppLocation;
+  /** Last position read from the device GPS, if any — drawn on the map. */
+  deviceLocation: AppLocation | null;
   favorites: string[];
   settings: AppSettings;
 };
@@ -90,17 +93,34 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function defaultState(): AppState {
-  return { selected: HOME_LOCATION, favorites: ['monas'], settings: { ...DEFAULT_SETTINGS } };
+  return {
+    selected: HOME_LOCATION,
+    deviceLocation: null,
+    favorites: ['monas'],
+    settings: { ...DEFAULT_SETTINGS },
+  };
 }
 
 let state: AppState = defaultState();
 
+type PersistedLocation = { name: string; area: string; latitude: number; longitude: number };
+
 type PersistedAppState = {
   selectedSlug?: string;
-  selected?: { slug: string; name: string; area: string; latitude: number; longitude: number };
+  selected?: PersistedLocation & { slug: string };
+  deviceLocation?: PersistedLocation;
   favorites?: string[];
   settings?: Partial<AppSettings>;
 };
+
+function toAppLocation(slug: string, saved: PersistedLocation): AppLocation {
+  return {
+    slug,
+    name: saved.name,
+    area: saved.area,
+    location: { latitude: saved.latitude, longitude: saved.longitude, timezone: 'Asia/Jakarta' },
+  };
+}
 
 const listeners = new Set<() => void>();
 
@@ -114,6 +134,14 @@ function emit() {
       latitude: state.selected.location.latitude,
       longitude: state.selected.location.longitude,
     },
+    deviceLocation: state.deviceLocation
+      ? {
+          name: state.deviceLocation.name,
+          area: state.deviceLocation.area,
+          latitude: state.deviceLocation.location.latitude,
+          longitude: state.deviceLocation.location.longitude,
+        }
+      : undefined,
     favorites: state.favorites,
     settings: state.settings,
   } satisfies PersistedAppState);
@@ -135,24 +163,48 @@ export function useAppState(): AppState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+/**
+ * Any place the app can look at: the five showcase points, or one of the
+ * nationwide cities. Cities are stored in the bundle, so a city picked from the
+ * Indonesia screen keeps working after a restart without extra state.
+ */
 export function findLocation(slug: string): AppLocation | null {
-  return ALL_LOCATIONS.find((entry) => entry.slug === slug) ?? null;
+  const known = ALL_LOCATIONS.find((entry) => entry.slug === slug);
+  if (known) return known;
+
+  const city = INDONESIA_CITIES.find((entry) => entry.slug === slug);
+  if (!city) return null;
+  return {
+    slug: city.slug,
+    name: city.name,
+    area: city.province,
+    location: { latitude: city.latitude, longitude: city.longitude, timezone: city.timezone },
+  };
 }
 
-const CUSTOM_SLUG = 'lokasi-saya';
+export const DEVICE_LOCATION_SLUG = 'lokasi-saya';
 
 /**
  * GPS result, kept as a normal AppLocation so every screen keeps working.
- * The coordinates are persisted with the rest of the state.
+ * Stored as `deviceLocation` too, so the map keeps a "Lokasi saya" pin (and the
+ * ability to return to it) after the user picks a landmark. Coordinates are
+ * persisted with the rest of the state.
  */
 export function selectCustomLocation(name: string, latitude: number, longitude: number) {
   const next: AppLocation = {
-    slug: CUSTOM_SLUG,
+    slug: DEVICE_LOCATION_SLUG,
     name,
     area: 'Lokasi perangkat',
     location: { latitude, longitude, timezone: 'Asia/Jakarta' },
   };
-  state = { ...state, selected: next };
+  state = { ...state, selected: next, deviceLocation: next };
+  emit();
+}
+
+/** Re-select the stored device position without a new GPS read. */
+export function selectDeviceLocation() {
+  if (!state.deviceLocation || state.deviceLocation.slug === state.selected.slug) return;
+  state = { ...state, selected: state.deviceLocation };
   emit();
 }
 
@@ -191,21 +243,15 @@ export function resetAppState() {
 export async function hydrateAppState(): Promise<void> {
   const saved = await loadPersisted<PersistedAppState>('app');
   if (!saved) return;
-  const savedSelection =
-    saved.selectedSlug === CUSTOM_SLUG && saved.selected
-      ? {
-          slug: CUSTOM_SLUG,
-          name: saved.selected.name,
-          area: saved.selected.area,
-          location: {
-            latitude: saved.selected.latitude,
-            longitude: saved.selected.longitude,
-            timezone: 'Asia/Jakarta',
-          },
-        }
-      : null;
+  const selected =
+    saved.selectedSlug === DEVICE_LOCATION_SLUG && saved.selected
+      ? toAppLocation(DEVICE_LOCATION_SLUG, saved.selected)
+      : (findLocation(saved.selectedSlug ?? '') ?? HOME_LOCATION);
   state = {
-    selected: savedSelection ?? findLocation(saved.selectedSlug ?? '') ?? HOME_LOCATION,
+    selected,
+    deviceLocation: saved.deviceLocation
+      ? toAppLocation(DEVICE_LOCATION_SLUG, saved.deviceLocation)
+      : null,
     favorites: Array.isArray(saved.favorites) ? saved.favorites : state.favorites,
     settings: { ...DEFAULT_SETTINGS, ...saved.settings },
   };

@@ -31,13 +31,6 @@ export type ThemeColors = {
   heroBottom: string;
   /** Soft off-white core of the hero glow */
   glow: string;
-  /** Map road strokes */
-  road: string;
-  mapBg: string;
-  park: string;
-  river: string;
-  mapLabel: string;
-  areaLabel: string;
   /** Text/icons drawn on top of `accent` or another saturated fill */
   onAccent: string;
   /** Bottom-sheet backdrop */
@@ -60,12 +53,6 @@ export const lightColors: ThemeColors = {
   heroSky: '#c6ecfe',
   heroBottom: '#eef6ff',
   glow: '#fcfcff',
-  road: '#ffffff',
-  mapBg: '#f1f4f4',
-  park: '#e0eee2',
-  river: '#d7ebf6',
-  mapLabel: '#748ca7',
-  areaLabel: '#a3adb8',
   onAccent: '#ffffff',
   scrim: 'rgba(15, 38, 74, 0.34)',
 };
@@ -86,12 +73,6 @@ export const darkColors: ThemeColors = {
   heroSky: '#173a5e',
   heroBottom: '#101d2c',
   glow: '#22344a',
-  road: '#2a3b52',
-  mapBg: '#0f1724',
-  park: '#16281f',
-  river: '#173247',
-  mapLabel: '#8ba2bd',
-  areaLabel: '#6f86a1',
   onAccent: '#08182b',
   scrim: 'rgba(0, 0, 0, 0.55)',
 };

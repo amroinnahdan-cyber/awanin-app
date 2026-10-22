@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import * as Location from 'expo-location';
 import { Check, Crosshair, Search, Star } from 'lucide-react-native';
 
 import { Sheet, SheetRow } from '@/components/Sheet';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { useLocationDirectory } from '@/hooks/useAirQuality';
 import { categoryFor } from '@/lib/aqi';
 import {
   ALL_LOCATIONS,
-  selectCustomLocation,
   selectLocation,
   toggleFavorite,
   useAppState,
@@ -21,15 +20,15 @@ import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/t
  * The one place a location is chosen: the home header, the history picker and
  * the map's search field all open this sheet, so the choice stays consistent.
  *
- * "Gunakan lokasi saya" reads the device GPS and turns the result into a normal
- * location, so every screen keeps working without a parallel code path.
+ * "Gunakan lokasi saya" reads the device GPS via the shared `useGeolocation`
+ * hook and turns the result into a normal location, so every screen keeps
+ * working without a parallel code path.
  */
 export function LocationSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { selected, favorites } = useAppState();
   const directory = useLocationDirectory();
   const [query, setQuery] = useState('');
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const { locating, error: locationError, locate } = useGeolocation();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
 
@@ -54,36 +53,7 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
   };
 
   const locateMe = async () => {
-    setLocationError(null);
-    setLocating(true);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setLocationError('Izin lokasi ditolak. Aktifkan lewat pengaturan perangkat.');
-        return;
-      }
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const { latitude, longitude } = position.coords;
-
-      let name = 'Lokasi saya';
-      try {
-        const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
-        name = place?.district ?? place?.subregion ?? place?.city ?? name;
-      } catch {
-        // Reverse geocoding needs a network; the coordinates are still valid.
-      }
-
-      selectCustomLocation(name, latitude, longitude);
-      onClose();
-    } catch (error) {
-      setLocationError(
-        error instanceof Error ? error.message : 'Gagal membaca lokasi perangkat.',
-      );
-    } finally {
-      setLocating(false);
-    }
+    if (await locate()) onClose();
   };
 
   return (
@@ -134,34 +104,43 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
         const isSelected = entry.slug === selected.slug;
         const isFavorite = favorites.includes(entry.slug);
         return (
-          <Pressable
-            key={entry.slug}
-            accessibilityRole="button"
-            accessibilityLabel={entry.name}
-            accessibilityState={{ selected: isSelected }}
-            onPress={() => choose(entry)}
-            style={({ pressed }) => [
-              styles.row,
-              isSelected && styles.rowSelected,
-              pressed && styles.rowPressed,
-            ]}
-          >
-            <View style={styles.rowText}>
-              <Text style={styles.name}>{entry.name}</Text>
-              <Text style={styles.area}>{entry.area}</Text>
-            </View>
-
-            {category ? (
-              <View style={[styles.aqiChip, { backgroundColor: `${category.color}1f` }]}>
-                <View style={[styles.dot, { backgroundColor: category.color }]} />
-                <Text style={[styles.aqiValue, { color: category.color }]}>{aqi}</Text>
-                <Text style={[styles.aqiLabel, { color: category.color }]}>
-                  {category.short}
-                </Text>
+          /*
+            The star is a sibling of the row button, not a child: nesting one
+            interactive element inside another produced `<button>` inside
+            `<button>` on web ("In HTML, button cannot be a descendant of
+            button") and an invalid focus order for screen readers.
+          */
+          <View key={entry.slug} style={[styles.row, isSelected && styles.rowSelected]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={entry.name}
+              accessibilityState={{ selected: isSelected }}
+              onPress={() => choose(entry)}
+              style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.name}>{entry.name}</Text>
+                <Text style={styles.area}>{entry.area}</Text>
               </View>
-            ) : (
-              <Text style={styles.pending}>memuat…</Text>
-            )}
+
+              {category ? (
+                <View style={[styles.aqiChip, { backgroundColor: `${category.color}1f` }]}>
+                  <View style={[styles.dot, { backgroundColor: category.color }]} />
+                  <Text style={[styles.aqiValue, { color: category.color }]}>{aqi}</Text>
+                  <Text style={[styles.aqiLabel, { color: category.color }]}>
+                    {category.short}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.pending}>memuat…</Text>
+              )}
+
+              <View style={styles.checkSlot}>
+                {isSelected ? (
+                  <Check size={17} color={colors.accent} strokeWidth={2.4} />
+                ) : null}
+              </View>
+            </Pressable>
 
             <Pressable
               accessibilityRole="button"
@@ -182,13 +161,7 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
                 strokeWidth={1.8}
               />
             </Pressable>
-
-            <View style={styles.checkSlot}>
-              {isSelected ? (
-                <Check size={17} color={colors.accent} strokeWidth={2.4} />
-              ) : null}
-            </View>
-          </Pressable>
+          </View>
         );
       })}
 
@@ -239,7 +212,16 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 10,
-      paddingHorizontal: 6,
+      paddingRight: 6,
+      borderRadius: radius.control,
+    },
+    rowMain: {
+      flex: 1,
+      alignSelf: 'stretch' as const,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 10,
+      paddingLeft: 6,
       borderRadius: radius.control,
     },
     rowPressed: {

@@ -29,9 +29,9 @@ export default function BantuanScreen() {
 
       <InfoSection title="Memakai aplikasi" delay={60}>
         <InfoFaq question="Bagaimana mengganti lokasi?">
-          Ketuk nama lokasi di Beranda, tombol kaca pembesar di Peta, atau nama lokasi di Riwayat —
-          ketiganya membuka pemilih yang sama. Di sana ada opsi “Gunakan lokasi saya” untuk membaca
-          GPS perangkat (opsional).
+          Ketuk nama lokasi di Beranda, baris lokasi di layar Sekitar, atau nama lokasi di Riwayat.
+          Beranda dan Riwayat membuka pemilih lokasi yang sama; di Sekitar kamu bisa langsung memilih
+          dari daftar yang diurutkan menurut jarak dari posisi perangkat.
         </InfoFaq>
         <InfoFaq question="Bagaimana menyimpan lokasi favorit?">
           Buka pemilih lokasi lalu ketuk ikon bintang di baris lokasi. Favorit bisa diatur ulang di

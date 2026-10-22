@@ -15,7 +15,7 @@ riwayat, dan push notification.
 ```
 ┌──────────────────────┐        HTTPS/JSON        ┌──────────────────────────┐
 │  Awanin app (Expo)   │ ───────────────────────▶ │  awanin-server           │
-│  Beranda · Peta      │ ◀─────────────────────── │  Express + SQLite        │
+│  Beranda · Sekitar   │ ◀─────────────────────── │  Express + SQLite        │
 │  Riwayat · Profil    │   reading, forecast,     │  cache · device registry │
 │  Notifikasi          │   history, subscription  │  scheduler · Expo push   │
 └─────────┬────────────┘                          └────────────┬─────────────┘
@@ -107,7 +107,7 @@ Tanpa emulator, `npx expo start --web` atau scan QR dengan Expo Go di HP juga bi
 ```bash
 npm run lint         # eslint .
 npm run typecheck    # tsc --noEmit
-npm test             # jest (20 tes)
+npm test             # jest (59 tes)
 npm run check        # ketiganya sekaligus
 
 cd server
@@ -117,28 +117,61 @@ npm run typecheck && npm test   # node:test + supertest (23 tes)
 CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) menjalankan
 lint, typecheck, tes aplikasi, lalu typecheck, tes, dan build backend pada setiap push.
 
-## Delapan layar (seluruh canvas Hi-Fi)
+## Layar (canvas Hi-Fi + tambahan)
 
 | Rute | Layar | Node Figma |
 |---|---|---|
 | — (overlay saat launch) | Splash Screen | `2027:8125` |
 | `/` | Beranda / Air Quality Dashboard | `2027:8143` |
-| `/peta` | Peta Kualitas Udara | `2027:8233` |
+| `/sekitar` | Sekitar — kualitas udara di posisi perangkat | — (tanpa peta) |
 | `/riwayat` | Riwayat Kualitas Udara | `2027:8376` |
 | `/profil` | Profil | `2027:8531` |
 | `/notifikasi` | Notifikasi | `2027:8607` |
 | `/tips` | Tips Kesehatan | `2027:8473` |
-| `/lokasi/[slug]` | Detail Lokasi (Monas, Bundaran HI, GBK, Kota Tua) | `2027:8300` |
+| `/lokasi/[slug]` | Detail Lokasi (Monas, Bundaran HI, GBK, Kota Tua, kota nasional) | `2027:8300` |
+| `/indonesia` | Kualitas Udara Indonesia — 100 kota, 38 provinsi | — (tambahan) |
 
 Navigasi memakai Expo Router (`src/app/`) dengan bottom nav kustom yang mengikuti
 geometri Figma: 12 top + 41 item + 18 gap + 4 home indicator + 7 bottom = 82.
 
-Alur yang tersambung: bell di Beranda → Notifikasi, kartu Lokasi Populer → Detail
-Lokasi, kartu pratinjau lokasi di Peta → Detail Lokasi, tombol "Lihat Rute" di Detail →
-Peta, dan kartu "Rekomendasi" di Detail → Tips Kesehatan.
+Beranda juga menampilkan **Waktu terbaik olahraga hari ini**: jendela dua jam dengan
+rata-rata AQI terendah di antara jam-jam yang masih tersisa (dihitung dari prakiraan
+per jam), plus saran intensitas berdasarkan kategori AQI jendela itu. Bila sisa hari
+relatif rata, kartu menyebutkannya alih-alih memilih pemenang dari selisih kecil.
 
-Splash mengikuti prototype Figma: latar `#d9eeff`, transisi 300ms ease-out, dan bisa
-diketuk untuk langsung masuk. Isinya memakai logo asli Awanin, bukan ikon pengganti.
+Bagian **“Udara terbaik & terburuk”** di Beranda menggantikan strip “Lokasi Populer”:
+tiga kota terbersih dan tiga kota paling berpolusi hari ini, lengkap dengan provinsi,
+peringkat nasional, AQI berwarna, dan perubahan 24 jam (▲ naik = memburuk, ▼ turun =
+membaik, dibanding jam yang sama kemarin). Monas, Bundaran HI, GBK, dan Kota Tua
+berjarak <5 km dan jatuh di sel grid model yang sama, jadi keempat kartu lama hampir
+selalu mengulang satu angka. Ketuk kota di daftar baru untuk menjadikannya lokasi aktif
+sekaligus membuka detailnya; “Lihat semua” membuka layar nasional (rata-rata nasional,
+pencarian kota/provinsi, filter kategori, dan peringkat 100 kota). Delta 24 jam yang
+sama juga muncul di setiap baris peringkat nasional dan di bawah ring AQI pada Detail
+Lokasi, sehingga trennya konsisten di ketiga layar.
+
+Seluruh 100 kota diambil dalam **satu** permintaan Open-Meteo (koordinat dipisah koma),
+di-cache 10 menit dan dipakai bersama oleh Beranda dan layar nasional, dengan refresh
+manual dibatasi satu menit agar kuota gratis (600/menit, 10.000/hari) tidak habis karena
+pull-to-refresh berulang. Perubahan 24 jam butuh request tambahan (`hourly=us_aqi`,
+`past_hours=25&forecast_hours=1` = 26 sampel): Beranda hanya meminta enam kota yang
+tampil, layar nasional meminta sisanya untuk delta di setiap baris, dan Detail Lokasi
+meminta satu titik. Cache disimpan **per kota** selama 30 menit, jadi membuka Beranda
+lalu layar nasional hanya mengirim request untuk kota yang belum punya delta. Karena
+Beranda ikut memicu dua request itu, jalur langsung ke Open-Meteo adalah hal pertama
+yang perlu dipindah ke cache backend bila aplikasi dipakai banyak orang.
+
+Alur yang tersambung: bell di Beranda → Notifikasi, baris kota di “Udara terbaik &
+terburuk” → Detail Lokasi (sekaligus memilih lokasi itu), “Lihat semua” → peringkat
+nasional → Detail kota, baris lokasi di Sekitar → Detail Lokasi, tombol "Lihat di
+Sekitar" di Detail → Sekitar, dan kartu "Rekomendasi" di Detail → Tips Kesehatan.
+
+Splash mengikuti prototype Figma dengan revisi visual: latar gradasi langit (terang
+`#f6fbff → #dcedff → #eaf4ff`, gelap `#0b2038 → #0d1420`), glyph Awanin di dalam tile
+bergaya ikon aplikasi, wordmark `awanin`, dan tagline **Know Your Air**. Tile-nya
+sengaja terang di kedua tema supaya glyph biru tetap kontras — versi sebelumnya
+menaruh lock-up biru di atas `colors.sky` gelap (`#16324f`), yang praktis tidak
+terbaca. Transisi 300ms ease-out dan ketuk-untuk-masuk tetap seperti prototype.
 Kunjungan pertama menampilkan onboarding singkat yang bisa dilewati.
 
 ## Backend
@@ -149,7 +182,7 @@ interaktif di `http://localhost:4000/docs` (spesifikasi OpenAPI 3.1:
 
 | Metode | Endpoint | Dipakai aplikasi untuk |
 |---|---|---|
-| `GET` | `/v1/air?lat&lon` | Beranda, Peta, Detail Lokasi |
+| `GET` | `/v1/air?lat&lon` | Beranda, Sekitar, Detail Lokasi |
 | `GET` | `/v1/air/:slug/history?days=7\|30` | Riwayat |
 | `GET` | `/v1/locations` | AQI semua kawasan |
 | `POST/PATCH/DELETE` | `/v1/devices` | Registrasi token push & preferensi |
@@ -199,7 +232,7 @@ menghasilkan:
 | Aset | Ukuran | Dipakai untuk |
 |---|---|---|
 | `assets/logo-source.png` | 1254² | arsip asli |
-| `assets/logo-lockup.png` | 720×542 | splash (glyph + wordmark) |
+| `assets/logo-lockup.png` | 720×542 | arsip (splash kini memakai glyph + wordmark teks) |
 | `assets/logo-mark.png` | 512² | glyph transparan |
 | `assets/icon.png` | 1024² | ikon iOS/macOS |
 | `assets/favicon.png` | 64² | favicon web |
@@ -221,7 +254,7 @@ AI dan disimpan di `assets/`:
 | Aset | Dipakai untuk |
 |---|---|
 | `img-splash.jpg` | Ilustrasi Splash (langit, awan, skyline Monas) |
-| `img-monas.jpg` | Hero Detail Lokasi + tile Lokasi Populer + kartu pratinjau Peta |
+| `img-monas.jpg` | Hero Detail Lokasi + tile Lokasi Populer + kartu lokasi aktif |
 | `img-bundaran-hi.jpg` | idem, untuk Bundaran HI |
 | `img-gbk.jpg` | idem, untuk GBK |
 | `img-kota-tua.jpg` | idem, untuk Kota Tua |
@@ -236,7 +269,7 @@ Tombol kembali memakai `useBackOrHome()` (`src/lib/navigation.ts`). Ini bukan se
 (tombol terasa mati) — sementara tanpa riwayat sama sekali ia melempar
 "The action 'GO_BACK' was not handled". Handler ini membaca `navigation.getState()`:
 indeks 0 berarti tidak ada layar sebelumnya, jadi ia `replace` ke parent yang pasti
-(`/` untuk Notifikasi & Tips, `/peta` untuk Detail Lokasi).
+(`/` untuk Notifikasi & Tips, `/sekitar` untuk Detail Lokasi).
 
 ## Sumber data
 
@@ -246,10 +279,19 @@ indeks 0 berarti tidak ada layar sebelumnya, jadi ia `replace` ke parent yang pa
   (`us_aqi`, `pm2_5`, `pm10`, `nitrogen_dioxide`, `ozone`, …)
 - Cuaca: `api.open-meteo.com/v1/forecast` (`temperature_2m`, `relative_humidity_2m`, `wind_speed_10m`)
 - Riwayat: `hourly=us_aqi&past_days=7|30`, diagregasi menjadi rata-rata/maks/min harian
+- Nasional: `latitude=-2.1,-6.2,…&longitude=113.9,106.8,…&current=us_aqi` — satu
+  permintaan untuk 100 kota, respons berupa array sesuai urutan koordinat
 
 Data Open-Meteo untuk Jakarta berasal dari model global CAMS (~45 km, 3-jaman),
 bukan stasiun pengukuran setempat. Lisensi non-komersial, atribusi wajib — ditampilkan
-di footer Beranda.
+di footer Beranda dan layar Tentang.
+
+Daftar kota nasional berasal dari **GeoNames** ([`ID.zip`](https://download.geonames.org/export/dump/ID.zip),
+lisensi CC BY 4.0): populated places, dikurangi menjadi ibu kota 38 provinsi plus kota
+terbesar, dengan kota yang berjarak < 20 km dari pilihan yang lebih besar dibuang agar
+sprawl Jabodetabek tidak memenuhi daftar. Nama provinsi diterjemahkan ke bahasa
+Indonesia dan beberapa ejaan diperbaiki. Atribusi GeoNames tampil di footer layar
+`/indonesia` dan di layar Tentang.
 
 Open-Meteo hanya menerbitkan prakiraan AQI **lima hari**; hari keenam dan ketujuh
 dikirim sebagai `null`. Backend membuang sampel kosong tersebut (bukan mengubahnya
@@ -348,15 +390,15 @@ Pengaturan di layar Notifikasi mengendalikan keduanya: **Peringatan Kualitas Uda
 
 ## Yang masih perkiraan
 
-- **Geometri jalan & sungai di layar Peta.** Figma menyimpannya sebagai node gambar
-  vektor dan permintaan `geometry=paths` selalu ditolak rate limit (HTTP 429). Jaringan
-  jalan digambar ulang sebagai stylised map yang lebih padat (arteri melewati keempat
-  marker, sungai ala Ciliwung di sisi timur Monas), tetapi tetap bukan geometri asli.
-  Posisi taman, label kawasan, dan marker memakai koordinat dari file.
+- **Layar Sekitar tidak memakai peta.** Versi sebelumnya menggambar peta Jakarta secara
+  manual (geometri asli di Figma tidak bisa diambil), sehingga posisi marker hanya
+  ilustratif. Sekarang layar itu membaca GPS perangkat dan mengurutkan lima lokasi
+  terpantau berdasarkan **jarak sebenarnya** (haversine), jadi tidak ada lagi gambar
+  peta maupun proyeksi koordinat ke kanvas.
 
-Pencarian lokasi di Peta **berfungsi**: baris "Cari lokasi..." membuka sheet pemilih
-lokasi yang punya kolom pencarian nyata (filter nama/area, empty state, tombol hapus),
-plus chip filter kategori Semua / Baik / Sedang / Tidak Sehat.
+Pemilih lokasi tetap tersedia di sheet lokasi (Beranda, Riwayat, Notifikasi): kolom
+pencarian nyata (filter nama/area, empty state, tombol hapus) plus tombol deteksi
+lokasi perangkat.
 
 ## Lisensi & atribusi
 

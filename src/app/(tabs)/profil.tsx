@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Share, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
@@ -17,6 +17,7 @@ import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { LocationSheet } from '@/components/LocationSheet';
 import { Sheet, SheetRow, Segmented } from '@/components/Sheet';
 import { Card, Divider } from '@/components/ui';
+import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
 import { removeSubscription } from '@/lib/subscription';
 import {
@@ -61,13 +62,13 @@ export default function ProfilScreen() {
   const push = usePushState();
   const [sheet, setSheet] = useState<SheetName>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const { state: shareState, share } = useShare();
 
   const shareApp = () => {
-    void Share.share({
-      message:
-        'Awanin — Know Your Air. Pantau kualitas udara Jakarta lewat aplikasi ini: ' +
-        'AQI real-time, prakiraan, peta lokasi, riwayat, dan tips kesehatan.',
-    });
+    void share(
+      'Awanin — Know Your Air. Pantau kualitas udara Jakarta lewat aplikasi ini: ' +
+        'AQI real-time, prakiraan, lokasi di sekitarmu, riwayat, dan tips kesehatan.',
+    );
   };
 
   const rows: SettingRow[] = [
@@ -118,6 +119,8 @@ export default function ProfilScreen() {
       key: 'bagikan',
       label: 'Beritahu Teman',
       icon: Send,
+      // Desktop browsers have no share sheet: say so instead of doing nothing.
+      value: shareState === 'copied' ? 'Tersalin' : shareState === 'failed' ? 'Gagal' : undefined,
       onPress: shareApp,
     },
     {
@@ -153,19 +156,27 @@ export default function ProfilScreen() {
           {rows.map((row, index) => (
             <View key={row.key}>
               {index > 0 ? <Divider /> : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={row.label}
-                onPress={row.onPress}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              >
-                <row.icon size={20} color={colors.accent} strokeWidth={1.8} />
-                <Text style={styles.rowLabel}>{row.label}</Text>
-                {row.value ? <Text style={styles.rowValue}>{row.value}</Text> : null}
-                {row.trailing ?? (
-                  <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
-                )}
-              </Pressable>
+              {/*
+                The trailing control (the notification Switch) is a sibling of
+                the tappable area, never a child of it: nested inside, a tap on
+                the switch also fired the row's onPress and opened /notifikasi.
+              */}
+              <View style={styles.row}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={row.label}
+                  onPress={row.onPress}
+                  style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
+                >
+                  <row.icon size={20} color={colors.accent} strokeWidth={1.8} />
+                  <Text style={styles.rowLabel}>{row.label}</Text>
+                  {row.value ? <Text style={styles.rowValue}>{row.value}</Text> : null}
+                  {row.trailing ? null : (
+                    <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
+                  )}
+                </Pressable>
+                {row.trailing ?? null}
+              </View>
             </View>
           ))}
         </Card>
@@ -307,7 +318,16 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 12,
-      paddingHorizontal: 12,
+      paddingRight: 12,
+      borderRadius: radius.control,
+    },
+    rowMain: {
+      flex: 1,
+      alignSelf: 'stretch' as const,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      paddingLeft: 12,
       borderRadius: radius.control,
     },
     rowPressed: {

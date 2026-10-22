@@ -153,7 +153,7 @@ type SectionTitleProps = {
   onAction?: () => void;
 };
 
-/** "Lokasi Populer" + "Lihat semua" row — 350 wide, space-between. */
+/** Section heading + optional "Lihat semua" action — 350 wide, space-between. */
 export function SectionTitle({ title, action, onAction }: SectionTitleProps) {
   const styles = useThemedStyles(createStyles);
   return (
@@ -178,10 +178,12 @@ export function Chip({
   label,
   active,
   onPress,
+  style,
 }: {
   label: string;
   active: boolean;
   onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   const styles = useThemedStyles(createStyles);
   return (
@@ -189,9 +191,12 @@ export function Chip({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
+      style={[styles.chip, active ? styles.chipActive : styles.chipIdle, style]}
     >
-      <Text style={[styles.chipLabel, active ? styles.chipLabelActive : styles.chipLabelIdle]}>
+      <Text
+        numberOfLines={1}
+        style={[styles.chipLabel, active ? styles.chipLabelActive : styles.chipLabelIdle]}
+      >
         {label}
       </Text>
     </Pressable>
