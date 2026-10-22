@@ -1,0 +1,63 @@
+name: Build APK & publish release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Assemble release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Generate native Android project
+        run: npx expo prebuild -p android --no-install
+        env:
+          EXPO_NO_TELEMETRY: '1'
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --console=plain
+
+      - name: Upload APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./app.json').expo.version")"
+          APK="awanin-${VERSION}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$APK"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            gh release upload "v${VERSION}" "$APK" --clobber
+          else
+            gh release create "v${VERSION}" "$APK" \
+              --title "Awanin v${VERSION}" \
+              --target "$GITHUB_SHA" \
+              --notes "APK Android Awanin ${VERSION} — build release otomatis dari GitHub Actions.
+
+**Cara pasang:** unduh file \`awanin-${VERSION}.apk\`, buka di ponsel Android, dan izinkan pemasangan dari sumber tidak dikenal bila diminta.
+
+Data kualitas udara & cuaca oleh [Open-Meteo](https://open-meteo.com/). Kode sumber: repositori ini."
+          fi
