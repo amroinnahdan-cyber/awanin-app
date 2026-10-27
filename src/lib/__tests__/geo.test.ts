@@ -1,4 +1,4 @@
-import { formatCoordinates, formatDistance, distanceKm } from '@/lib/geo';
+import { formatCoordinates, formatDistance, distanceKm, timezoneForCoordinates } from '@/lib/geo';
 
 const MONAS = { lat: -6.179, lon: 106.8271 };
 const BUNDARAN_HI = { lat: -6.1949, lon: 106.823 };
@@ -47,6 +47,44 @@ describe('formatDistance', () => {
   it('returns a dash for unusable input', () => {
     expect(formatDistance(Number.NaN)).toBe('—');
     expect(formatDistance(-1)).toBe('—');
+  });
+});
+
+describe('timezoneForCoordinates', () => {
+  it('gives each Indonesian zone the right IANA name', () => {
+    expect(timezoneForCoordinates(-6.1754, 106.8272)).toBe('Asia/Jakarta');
+    expect(timezoneForCoordinates(-5.1486, 119.4319)).toBe('Asia/Makassar');
+    expect(timezoneForCoordinates(-2.5337, 140.7181)).toBe('Asia/Jayapura');
+  });
+
+  it('does not split zones by longitude alone', () => {
+    // Surabaya sits east of 112.5°E but is firmly WIB, so a meridian cut would
+    // be an hour out for Indonesia's second city.
+    expect(timezoneForCoordinates(-7.2492, 112.7508)).toBe('Asia/Jakarta');
+    expect(timezoneForCoordinates(-8.65, 115.2167)).toBe('Asia/Makassar');
+  });
+
+  it('keeps Pontianak on its own zone rather than lumping it into WIB', () => {
+    expect(timezoneForCoordinates(-0.0319, 109.325)).toBe('Asia/Pontianak');
+  });
+
+  it('answers for a nearby point without a city of its own', () => {
+    // Cimahi is 10 km from Bandung.
+    expect(timezoneForCoordinates(-6.8722, 107.5425)).toBe('Asia/Jakarta');
+  });
+
+  it('prefers the device zone when no Indonesian city is close', () => {
+    expect(timezoneForCoordinates(51.5072, -0.1276, 'Europe/London')).toBe('Europe/London');
+    expect(timezoneForCoordinates(0, 0, null)).toBe('Asia/Jakarta');
+  });
+
+  it('never uses the fallback when a city is within reach', () => {
+    expect(timezoneForCoordinates(-2.5337, 140.7181, 'Europe/London')).toBe('Asia/Jayapura');
+  });
+
+  it('falls back on unusable coordinates instead of throwing', () => {
+    expect(timezoneForCoordinates(Number.NaN, 106.8, 'Asia/Makassar')).toBe('Asia/Makassar');
+    expect(timezoneForCoordinates(-6.17, Number.POSITIVE_INFINITY, null)).toBe('Asia/Jakarta');
   });
 });
 

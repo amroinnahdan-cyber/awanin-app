@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 
 import { JAKARTA_PUSAT, POPULAR_LOCATIONS, type Coordinates } from '@/api/openMeteo';
 import { INDONESIA_CITIES } from '@/data/indonesiaCities';
+import { timezoneForCoordinates } from '@/lib/geo';
 import { loadPersisted, savePersisted } from '@/lib/persist';
 
 /**
@@ -118,7 +119,13 @@ function toAppLocation(slug: string, saved: PersistedLocation): AppLocation {
     slug,
     name: saved.name,
     area: saved.area,
-    location: { latitude: saved.latitude, longitude: saved.longitude, timezone: 'Asia/Jakarta' },
+    // Zone is not persisted: it is derived from the coordinates so a fix taken
+    // in Makassar or Jayapura keeps WITA/WIT hours after a restart.
+    location: {
+      latitude: saved.latitude,
+      longitude: saved.longitude,
+      timezone: timezoneForCoordinates(saved.latitude, saved.longitude),
+    },
   };
 }
 
@@ -199,7 +206,7 @@ export function selectCustomLocation(name: string, latitude: number, longitude: 
     slug: DEVICE_LOCATION_SLUG,
     name,
     area: 'Lokasi perangkat',
-    location: { latitude, longitude, timezone: 'Asia/Jakarta' },
+    location: { latitude, longitude, timezone: timezoneForCoordinates(latitude, longitude) },
   };
   state = { ...state, selected: next, deviceLocation: next };
   emit();
