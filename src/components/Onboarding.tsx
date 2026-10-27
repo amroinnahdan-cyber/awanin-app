@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import * as Location from 'expo-location';
 import { Bell, MapPin, Wind } from 'lucide-react-native';
 
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { registerForPush } from '@/lib/push';
 import { updateSettings } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
@@ -45,6 +45,7 @@ export function Onboarding() {
   const [step, setStep] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { locating, error: locateError, locate } = useGeolocation();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
 
@@ -66,20 +67,18 @@ export function Onboarding() {
     setBusy(false);
   };
 
+  /**
+   * Asking for the permission alone used to end the step with an instruction
+   * ("pilih Gunakan lokasi saya di daftar lokasi"), so tapping "Izinkan lokasi"
+   * changed nothing and the app kept showing Jakarta Pusat. Going through the
+   * shared hook reads the fix and selects it, so the step does what its label
+   * promises; a failure shows the hook's own message (permission denied, services
+   * off, no fix in 12 s) instead of a sentence that hides the reason.
+   */
   const allowLocation = async () => {
-    setBusy(true);
     setNote(null);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      setNote(
-        permission.status === 'granted'
-          ? 'Izin lokasi diberikan. Pilih “Gunakan lokasi saya” di daftar lokasi.'
-          : 'Izin lokasi ditolak. Kamu tetap bisa memilih lokasi dari daftar.',
-      );
-    } catch {
-      setNote('Lokasi tidak tersedia di perangkat ini.');
-    }
-    setBusy(false);
+    const done = await locate();
+    if (done) setNote('Lokasi perangkat aktif. Awanin membaca udara di tempatmu.');
   };
 
   return (
@@ -122,16 +121,18 @@ export function Onboarding() {
             accessibilityRole="button"
             accessibilityLabel="Izinkan lokasi"
             onPress={() => void allowLocation()}
-            disabled={busy}
+            disabled={locating}
             style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
           >
             <Text style={styles.secondaryLabel}>
-              {busy ? 'Meminta izin…' : 'Izinkan lokasi'}
+              {locating ? 'Mendeteksi lokasi…' : 'Izinkan lokasi'}
             </Text>
           </Pressable>
         ) : null}
 
-        {note ? <Text style={styles.note}>{note}</Text> : null}
+        {note || locateError ? (
+          <Text style={styles.note}>{note ?? locateError}</Text>
+        ) : null}
       </View>
 
       <View style={styles.bottom}>

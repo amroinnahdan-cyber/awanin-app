@@ -13,9 +13,11 @@ import { router } from 'expo-router';
 import { ChevronRight, Crosshair, MapPin, RefreshCw } from 'lucide-react-native';
 
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
-import { Card, Chip, InlineError, SectionTitle } from '@/components/ui';
+import { Card, Chip, SectionTitle } from '@/components/ui';
+import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import {
+  useIndonesiaRanking,
   useLocationAir,
   useLocationDirectory,
   useSelectedAir,
@@ -52,6 +54,31 @@ const FILTERS = [
 
 type FilterKey = (typeof FILTERS)[number]['key'];
 
+/** One line in the nearby list: a monitored point or a nationwide city. */
+type NearbyRow = {
+  slug: string;
+  name: string;
+  area: string;
+  /** Kilometres from the device fix; null when there is no fix to measure from. */
+  km: number | null;
+  aqi: number | undefined;
+};
+
+/**
+ * How many cities "Terdekat dari kamu" lists. Eight fills the card without
+ * becoming a second national ranking; the rest are one tap away on the Indonesia
+ * screen.
+ */
+const NEARBY_CITY_COUNT = 8;
+
+/**
+ * A city this close to one of the five monitored points only repeats it: next to
+ * Monas the list would otherwise show "Monas 0,2 km" and "Jakarta 5 km" as two
+ * separate places. The landmark wins because its coordinates are the precise
+ * ones the app has always used.
+ */
+const DUPLICATE_POINT_KM = 15;
+
 function matchesFilter(filter: FilterKey, aqi: number | undefined): boolean {
   if (filter === 'semua' || aqi === undefined) return true;
   if (filter === 'baik') return aqi <= 50;
@@ -86,31 +113,86 @@ export default function SekitarScreen() {
 
   const deviceAqi = deviceCoords ? (deviceAir.data?.aqi ?? aqiBySlug.get(DEVICE_LOCATION_SLUG)) : undefined;
 
-  const rows = useMemo(() => {
-    const list = ALL_LOCATIONS.map((entry) => ({
-      entry,
-      km:
-        deviceCoords === null
-          ? null
-          : distanceKm(
-              deviceCoords.latitude,
-              deviceCoords.longitude,
+  // A hundred cities cost one weighted request, so it is only worth paying for
+  // once a fix exists — without one the list stays on the five monitored points.
+  const ranking = useIndonesiaRanking({ enabled: deviceCoords !== null });
+
+  const cityAqi = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const reading of ranking.data?.readings ?? []) map.set(reading.slug, reading.aqi);
+    return map;
+  }, [ranking.data]);
+
+  const rows = useMemo<NearbyRow[]>(() => {
+    if (!deviceCoords) {
+      // Without a fix there is nothing honest to sort by, so the list keeps the
+      // app's own order (`HOME_LOCATION` first, then the four landmarks).
+      return ALL_LOCATIONS.map((entry) => ({
+        slug: entry.slug,
+        name: entry.name,
+        area: entry.area,
+        km: null,
+        aqi: aqiBySlug.get(entry.slug),
+      }));
+    }
+    const from = { latitude: deviceCoords.latitude, longitude: deviceCoords.longitude };
+    const kmTo = (latitude: number, longitude: number) =>
+      distanceKm(from.latitude, from.longitude, latitude, longitude);
+
+    // The monitored landmarks stay in the list with a fix — standing at Monas
+    // and being shown "Jakarta, 5 km" instead would be worse than useless.
+    const points: NearbyRow[] = ALL_LOCATIONS.map((entry) => ({
+      slug: entry.slug,
+      name: entry.name,
+      area: entry.area,
+      km: kmTo(entry.location.latitude, entry.location.longitude),
+      aqi: aqiBySlug.get(entry.slug),
+    }));
+
+    // Cities that would only repeat a landmark are dropped, then the rest are
+    // measured and merged. The list stays whole and is cut only after filtering:
+    // slicing first meant a "Baik" filter showed nothing while clean cities
+    // simply sat further down the list.
+    const cities: NearbyRow[] = INDONESIA_CITIES.filter(
+      (city) =>
+        !ALL_LOCATIONS.some(
+          (entry) =>
+            distanceKm(
               entry.location.latitude,
               entry.location.longitude,
-            ),
+              city.latitude,
+              city.longitude,
+            ) <= DUPLICATE_POINT_KM,
+        ),
+    ).map((city) => ({
+      slug: city.slug,
+      name: city.name,
+      area: city.province,
+      km: kmTo(city.latitude, city.longitude),
+      aqi: cityAqi.get(city.slug),
     }));
-    // Without a fix there is nothing honest to sort by, so the list keeps the
-    // app's own order (`HOME_LOCATION` first, then the four landmarks).
-    return list.sort((a, b) => (a.km === null || b.km === null ? 0 : a.km - b.km));
-  }, [deviceCoords]);
 
-  const visibleRows = rows.filter((row) => matchesFilter(filter, aqiBySlug.get(row.entry.slug)));
+    return [...points, ...cities].sort((a, b) => (a.km ?? 0) - (b.km ?? 0));
+  }, [deviceCoords, aqiBySlug, cityAqi]);
+
+  const visibleRows = rows
+    .filter((row) => matchesFilter(filter, row.aqi))
+    .slice(0, deviceCoords ? NEARBY_CITY_COUNT : rows.length);
   const nearest = deviceCoords ? rows[0] : null;
-  const selectedAqi = aqiBySlug.get(selected.slug) ?? selectedAir.data?.aqi;
-  const selectedCategory = selectedAqi === undefined ? null : categoryFor(selectedAqi);
   const usesDeviceLocation = selected.slug === DEVICE_LOCATION_SLUG;
+  const selectedAqi =
+    (usesDeviceLocation ? deviceAqi : undefined) ??
+    aqiBySlug.get(selected.slug) ??
+    cityAqi.get(selected.slug) ??
+    selectedAir.data?.aqi;
+  const selectedCategory = selectedAqi === undefined ? null : categoryFor(selectedAqi);
 
   const deviceCategory = deviceAqi === undefined ? null : categoryFor(deviceAqi);
+
+  /** Numbers missing, list still usable: the two requests that feed the badges. */
+  const aqiIncomplete =
+    (directory.error !== null && directory.data === null) ||
+    (deviceCoords !== null && ranking.error !== null && ranking.data === null);
 
   return (
     <ScrollView
@@ -123,7 +205,10 @@ export default function SekitarScreen() {
           onRefresh={() => {
             void directory.reload({ force: true });
             void selectedAir.reload({ force: true });
-            if (deviceCoords) void deviceAir.reload({ force: true });
+            if (deviceCoords) {
+              void deviceAir.reload({ force: true });
+              void ranking.reload({ force: true });
+            }
           }}
           tintColor={colors.accent}
           colors={[colors.accent]}
@@ -208,8 +293,8 @@ export default function SekitarScreen() {
           {nearest && nearest.km !== null && nearest.km <= NEARBY_HINT_KM ? (
             <Text style={styles.heroHint}>
               {nearest.km === 0
-                ? `Kamu berada di ${nearest.entry.name}.`
-                : `Sekitar ${formatDistance(nearest.km)} dari ${nearest.entry.name}.`}
+                ? `Kamu berada di ${nearest.name}.`
+                : `Sekitar ${formatDistance(nearest.km)} dari ${nearest.name}.`}
             </Text>
           ) : null}
 
@@ -296,29 +381,55 @@ export default function SekitarScreen() {
         </View>
 
         <View>
-          <SectionTitle title={deviceCoords ? 'Terdekat dari kamu' : 'Lima lokasi terpantau'} />
+          {/* The eight shown are the nearest, not everywhere the app knows:
+              the nationwide screen is one tap away for the rest. */}
+          <SectionTitle
+            title={deviceCoords ? 'Terdekat dari kamu' : 'Lima lokasi terpantau'}
+            action={deviceCoords ? 'Lihat semua' : undefined}
+            onAction={() => router.push('/indonesia')}
+          />
           <Text style={styles.sectionHint}>
             {deviceCoords
-              ? 'Diurutkan dari jarak sebenarnya ke posisi perangkat.'
-              : 'Aktifkan lokasi untuk melihat jarak dan urutan dari posisimu.'}
+              ? 'Titik terpantau dan kota di seluruh Indonesia, diurutkan dari jarak sebenarnya.'
+              : 'Aktifkan lokasi untuk melihat titik dan kota terdekat beserta jaraknya.'}
           </Text>
         </View>
 
-        {directory.error && !directory.data ? (
-          <InlineError message={directory.error} onRetry={() => void directory.reload()} />
-        ) : (
-          <Card style={styles.list}>
-            {visibleRows.length === 0 ? (
-              <Text style={styles.empty}>Belum ada lokasi pada kategori ini.</Text>
-            ) : (
-              visibleRows.map(({ entry, km }, index) => {
-                const aqi = aqiBySlug.get(entry.slug);
+        {/*
+          A failed AQI request must not hide the list. Names and distances are
+          still valid, and picking a row is the whole point of the screen, so the
+          badges degrade to "·" with one retry line instead of an error card
+          replacing everything.
+        */}
+        {aqiIncomplete ? (
+          <View style={styles.errorRow}>
+            <Text style={styles.error}>Angka AQI belum termuat.</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Coba muat ulang angka AQI"
+              hitSlop={8}
+              onPress={() => {
+                void directory.reload();
+                if (deviceCoords) void ranking.reload();
+              }}
+            >
+              <Text style={styles.retry}>Coba lagi</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        <Card style={styles.list}>
+          {visibleRows.length === 0 ? (
+            <Text style={styles.empty}>Belum ada lokasi pada kategori ini.</Text>
+          ) : (
+            visibleRows.map((row, index) => {
+                const { slug, name, area, km, aqi } = row;
                 const category = aqi === undefined ? null : categoryFor(aqi);
-                const isSelected = selected.slug === entry.slug;
-                const meta = km === null ? entry.area : `${entry.area} · ${formatDistance(km)}`;
+                const isSelected = selected.slug === slug;
+                const meta = km === null ? area : `${area} · ${formatDistance(km)}`;
 
                 return (
-                  <View key={entry.slug}>
+                  <View key={slug}>
                     {index > 0 ? <View style={styles.divider} /> : null}
                     {/*
                       Two sibling buttons, not one nested in the other: a
@@ -329,11 +440,11 @@ export default function SekitarScreen() {
                     <View style={[styles.row, isSelected && styles.rowSelected]}>
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={`${entry.name}, ${
+                        accessibilityLabel={`${name}, ${
                           aqi === undefined ? 'memuat indeks' : `AQI ${aqi}`
                         }, ${meta}. Pilih lokasi`}
                         accessibilityState={{ selected: isSelected }}
-                        onPress={() => selectLocation(entry.slug)}
+                        onPress={() => selectLocation(slug)}
                         style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]}
                       >
                         <View
@@ -355,7 +466,7 @@ export default function SekitarScreen() {
 
                         <View style={styles.rowText}>
                           <Text style={[styles.rowName, isSelected && styles.rowNameSelected]}>
-                            {entry.name}
+                            {name}
                           </Text>
                           <Text style={styles.rowMeta} numberOfLines={1}>
                             {meta}
@@ -365,12 +476,12 @@ export default function SekitarScreen() {
 
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={`Buka detail ${entry.name}`}
+                        accessibilityLabel={`Buka detail ${name}`}
                         hitSlop={12}
                         onPress={() =>
                           router.push({
                             pathname: '/lokasi/[slug]',
-                            params: { slug: entry.slug },
+                            params: { slug },
                           })
                         }
                         style={({ pressed }) => [styles.rowDetail, pressed && styles.pressed]}
@@ -381,9 +492,8 @@ export default function SekitarScreen() {
                   </View>
                 );
               })
-            )}
-          </Card>
-        )}
+          )}
+        </Card>
 
         <SectionTitle title="Lokasi yang dipakai" />
         <Pressable

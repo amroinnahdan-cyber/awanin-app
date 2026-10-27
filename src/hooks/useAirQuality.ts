@@ -187,11 +187,15 @@ export function useLocationAir(location: Coordinates | null, slug?: string) {
  * Nationwide ranking for the Beranda card. It shares `fetchIndonesiaAqi`'s
  * ten-minute cache with the Indonesia screen, so opening one after the other
  * costs a single request.
+ *
+ * A hundred city coordinates are one weighted call, so a screen that only needs
+ * them after a device fix passes `enabled: false` until that fix exists.
  */
-export function useIndonesiaRanking() {
+export function useIndonesiaRanking({ enabled = true }: { enabled?: boolean } = {}) {
   return useAsync<IndonesiaReading>(
     (options) => fetchIndonesiaAqi({ force: options?.force }),
     [],
+    enabled,
   );
 }
 
