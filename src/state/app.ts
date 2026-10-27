@@ -169,6 +169,10 @@ export function useAppState(): AppState {
  * Indonesia screen keeps working after a restart without extra state.
  */
 export function findLocation(slug: string): AppLocation | null {
+  // The device position is a real slug too, so a notification or a link that
+  // points at it opens `lokasi-saya` instead of "lokasi tidak dikenal".
+  if (slug === DEVICE_LOCATION_SLUG && state.deviceLocation) return state.deviceLocation;
+
   const known = ALL_LOCATIONS.find((entry) => entry.slug === slug);
   if (known) return known;
 

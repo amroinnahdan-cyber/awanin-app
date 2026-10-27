@@ -2,9 +2,9 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type DimensionValue,
   type ImageStyle,
@@ -15,6 +15,7 @@ import {
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { CloudOff } from 'lucide-react-native';
 
+import { Text } from '@/components/Text';
 import { AQI_CATEGORIES, AQI_SCALE_MAX, categoryFor } from '@/lib/aqi';
 import { relativeTime } from '@/lib/format';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
@@ -41,17 +42,19 @@ export function Skeleton({
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
+        // Opacity is native-driver friendly; running this loop on the JS thread
+        // made the placeholder stutter while the first reading was loading.
         Animated.timing(pulse, {
           toValue: 1,
           duration: 720,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulse, {
           toValue: 0.5,
           duration: 720,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
     );

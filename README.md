@@ -107,7 +107,7 @@ Tanpa emulator, `npx expo start --web` atau scan QR dengan Expo Go di HP juga bi
 ```bash
 npm run lint         # eslint .
 npm run typecheck    # tsc --noEmit
-npm test             # jest (59 tes)
+npm test             # jest (74 tes)
 npm run check        # ketiganya sekaligus
 
 cd server
@@ -116,6 +116,63 @@ npm run typecheck && npm test   # node:test + supertest (23 tes)
 
 CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) menjalankan
 lint, typecheck, tes aplikasi, lalu typecheck, tes, dan build backend pada setiap push.
+
+## Rilis APK (signing)
+
+[`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) membangun APK dari
+tag `v*` (atau `workflow_dispatch`) dan mengunggahnya ke GitHub Releases. APK itu **wajib**
+memakai keystore rilis yang sama selamanya: Android hanya menerima update yang
+ditandatangani dengan kunci yang sama, jadi kalau kuncinya berubah semua pengguna harus
+uninstall dulu. Karena itu workflow **berhenti** kalau secret-nya belum diisi, bukan
+menerbitkan APK debug-signed.
+
+**Sekali saja — buat keystore** (simpan file dan password-nya; kalau hilang, aplikasi tidak
+bisa di-update lagi dan harus terbit sebagai aplikasi baru):
+
+```bash
+keytool -genkeypair -v \
+  -keystore awanin-release.keystore \
+  -alias awanin \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -storetype PKCS12 \
+  -dname "CN=Awanin, O=Awanin, C=ID"
+```
+
+**Tambahkan empat secret** di Settings → Secrets and variables → Actions. Semua nilai satu
+baris (tanpa newline):
+
+| Secret | Isi |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | hasil `base64 -w 0 awanin-release.keystore` (macOS: `base64 -i awanin-release.keystore`) |
+| `ANDROID_KEYSTORE_PASSWORD` | password keystore |
+| `ANDROID_KEY_ALIAS` | `awanin` |
+| `ANDROID_KEY_PASSWORD` | password key — untuk PKCS12 sama dengan password keystore |
+
+Alurnya: CI men-decode keystore ke `$RUNNER_TEMP` (di luar workspace, jadi tidak pernah
+ter-commit atau ter-upload sebagai artefak), memastikan `keytool` bisa membukanya, lalu
+`expo prebuild` + `assembleRelease`. Setelah build, sertifikat APK dibandingkan dengan
+sidik jari SHA-256 keystore; kalau berbeda, build gagal.
+
+**Langkah tiap rilis.** Rilis pertama yang bertanda tangan asli adalah **1.2.0**:
+
+1. Naikkan `expo.version` di `app.json` **dan** `android.versionCode` + `ios.buildNumber`
+   (integer, harus lebih besar dari rilis sebelumnya — Android menolak APK dengan
+   versionCode lebih kecil dari yang terpasang). Versi di layar Profil ikut otomatis karena
+   dibaca dari `Constants.expoConfig`.
+2. Commit, lalu buat tag yang **sama persis** dengan versi itu:
+   `git tag v1.2.0 && git push origin v1.2.0`. Workflow berhenti kalau tag dan `app.json`
+   tidak cocok, supaya tidak menimpa rilis versi lain.
+3. Pantau tab Actions. Sebelum upload, sertifikat APK dibandingkan dengan keystore rilis;
+   kalau berbeda, tidak ada yang terbit.
+4. Rilis `v1.1.0` yang lama masih bertanda tangan debug. Pengguna yang memasangnya harus
+   uninstall sekali sebelum memasang 1.2.0 — pertimbangkan menghapus atau menandai rilis
+   lama itu di halaman Releases.
+
+Baris `signingConfig` tidak diedit manual di `android/app/build.gradle`, karena folder itu
+dihasilkan `expo prebuild`. Aturannya ada di
+[`plugins/withReleaseSigning.js`](plugins/withReleaseSigning.js): buildType `release`
+memakai `signingConfigs.release` saat `AWANIN_KEYSTORE_FILE` tersedia, dan jatuh ke debug
+keystore hanya untuk build lokal tanpa secret — jangan diunggah sebagai rilis.
 
 ## Layar (canvas Hi-Fi + tambahan)
 

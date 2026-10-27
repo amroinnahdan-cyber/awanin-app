@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
+import { locationSlug } from '@/api/openMeteo';
 import { categoryFor, formatWib, shortDate } from '@/lib/aqi';
 import { loadPersisted, savePersisted } from '@/lib/persist';
 
@@ -10,6 +11,12 @@ export type AwaninNotification = {
   time: string;
   /** Which location the change was seen at, so the row can open it */
   place: string;
+  /**
+   * Route slug of `place`. Stored rather than derived at tap time: a device
+   * position is named after a district ("Kemang"), and slugifying that name
+   * produced `/lokasi/kemang`, which matches no location at all.
+   */
+  slug: string;
   tone: 'info' | 'warning';
   read: boolean;
 };
@@ -77,6 +84,7 @@ export type ReadingObservation = {
   aqi: number;
   observedAt: string;
   place?: string;
+  slug?: string;
 };
 
 export type NotificationGates = {
@@ -110,6 +118,7 @@ function tipFor(aqi: number): string {
  */
 export function recordReading(reading: ReadingObservation, gates: NotificationGates) {
   const place = reading.place ?? 'Jakarta Pusat';
+  const slug = reading.slug ?? locationSlug(place);
   const category = categoryFor(reading.aqi);
   const previous = lastCategoryByPlace.get(place);
   lastCategoryByPlace.set(place, category.label);
@@ -124,6 +133,7 @@ export function recordReading(reading: ReadingObservation, gates: NotificationGa
         body: `AQI terbaca ${reading.aqi} (${category.label}). ${category.message}${tip}`,
         time: formatWib(reading.observedAt),
         place,
+        slug,
         tone: reading.aqi > 100 ? 'warning' : 'info',
       });
     }
@@ -144,6 +154,7 @@ export function recordReading(reading: ReadingObservation, gates: NotificationGa
     body: `${category.message} AQI tercatat ${reading.aqi}.${tip}`,
     time: formatWib(reading.observedAt),
     place,
+    slug,
     tone: reading.aqi > 100 ? 'warning' : 'info',
   });
 }
@@ -175,7 +186,13 @@ export function clearNotificationCache() {
 export async function hydrateNotifications(): Promise<void> {
   const saved = await loadPersisted<PersistedNotifications>('notifications');
   if (!saved) return;
-  if (Array.isArray(saved.items)) items = saved.items.slice(0, 20);
+  if (Array.isArray(saved.items)) {
+    // Items written before `slug` existed are migrated on read, so an old feed
+    // still opens the right screen.
+    items = saved.items
+      .slice(0, 20)
+      .map((item) => ({ ...item, slug: item.slug ?? locationSlug(item.place) }));
+  }
   if (saved.lastCategory) {
     lastCategoryByPlace.clear();
     for (const [place, category] of Object.entries(saved.lastCategory)) {

@@ -117,12 +117,21 @@ function numberOr(value: number | string | null | undefined, fallback = 0): numb
 type CacheEntry = { at: number; value: unknown };
 const cache = new Map<string, CacheEntry>();
 
-async function withCache<T>(key: string, ttlMs: number, run: () => Promise<T>): Promise<T> {
+/**
+ * `force` skips the TTL read (pull-to-refresh) but still refreshes the entry, so
+ * it is a real refetch rather than a no-op that returns the identical object.
+ */
+async function withCache<T>(
+  key: string,
+  ttlMs: number,
+  run: () => Promise<T>,
+  force = false,
+): Promise<T> {
   const hit = cache.get(key);
   const now = Date.now();
-  if (hit && now - hit.at < ttlMs) return hit.value as T;
+  if (!force && hit && now - hit.at < ttlMs) return hit.value as T;
   const value = await run();
-  cache.set(key, { at: now, value });
+  cache.set(key, { at: Date.now(), value });
   return value;
 }
 
@@ -141,11 +150,13 @@ async function requestJson(url: string): Promise<ApiResponse> {
 
 export async function fetchCurrentReading(
   location: Coordinates = JAKARTA_PUSAT,
+  force = false,
 ): Promise<CurrentReading> {
   return withCache(
     `current:${location.latitude},${location.longitude}`,
     5 * 60_000,
     () => loadCurrentReading(location),
+    force,
   );
 }
 
@@ -213,11 +224,12 @@ export function findPopularLocation(slug: string) {
 }
 
 /** Light-weight single-location AQI read (no weather call). */
-export async function fetchAqiAt(location: Coordinates): Promise<number> {
+export async function fetchAqiAt(location: Coordinates, force = false): Promise<number> {
   return withCache(
     `aqi:${location.latitude},${location.longitude}`,
     5 * 60_000,
     () => loadAqiAt(location),
+    force,
   );
 }
 
@@ -266,11 +278,13 @@ export function groupHourlyByDay(
 export async function fetchDailyAqi(
   pastDays: number,
   location: Coordinates = JAKARTA_PUSAT,
+  force = false,
 ): Promise<DayAqi[]> {
   return withCache(
     `daily:${location.latitude},${location.longitude}:${pastDays}`,
     15 * 60_000,
     () => loadDailyAqi(pastDays, location),
+    force,
   );
 }
 
@@ -316,11 +330,13 @@ export function buildDailyForecast(
  */
 export async function fetchForecastBundle(
   location: Coordinates = JAKARTA_PUSAT,
+  force = false,
 ): Promise<ForecastBundle> {
   return withCache(
     `forecast:${location.latitude},${location.longitude}`,
     10 * 60_000,
     () => loadForecastBundle(location),
+    force,
   );
 }
 

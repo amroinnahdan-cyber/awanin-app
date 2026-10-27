@@ -17,28 +17,47 @@ type AsyncState<T> = {
   error: string | null;
 };
 
+/** `force` bypasses the API layer's TTL cache, so pull-to-refresh is a real refetch. */
+export type RunOptions = { force?: boolean };
+
+type AsyncResult<T> = AsyncState<T> & {
+  reload: (options?: RunOptions) => Promise<void>;
+  refreshing: boolean;
+};
+
+/**
+ * One in-flight request per hook, newest wins.
+ *
+ * `alive` alone was not enough: a dependency change re-armed it in the next
+ * effect run, so a slow answer for the *previous* location still passed the
+ * check and overwrote the new one — the classic "swap locations quickly and the
+ * reading (and its name) disagree" bug. Every run now takes a ticket and only
+ * the newest ticket may write, which also covers unmount.
+ */
 function useAsync<T>(
-  run: () => Promise<T>,
+  run: (options: RunOptions) => Promise<T>,
   deps: readonly unknown[],
-): AsyncState<T> & { reload: () => Promise<void>; refreshing: boolean } {
+  enabled = true,
+): AsyncResult<T> {
   const [state, setState] = useState<AsyncState<T>>({ data: null, loading: true, error: null });
   const [refreshing, setRefreshing] = useState(false);
-  const alive = useRef(true);
+  const mounted = useRef(true);
+  const ticket = useRef(0);
   const runRef = useRef(run);
   runRef.current = run;
 
-  const reload = useCallback(async () => {
+  const start = useCallback(async (options: RunOptions, mode: 'initial' | 'refresh') => {
+    const id = (ticket.current += 1);
+    const live = () => mounted.current && ticket.current === id;
+    if (mode === 'refresh') setRefreshing(true);
+    // A new request supersedes the previous failure: leaving the old error on
+    // screen next to a spinner claims the retry already failed.
+    setState((previous) => ({ ...previous, error: null }));
     try {
-      if (alive.current) {
-        setRefreshing(true);
-        // A new request supersedes the previous failure: leaving the old error
-        // on screen next to a spinner claims the retry already failed.
-        setState((previous) => ({ ...previous, error: null }));
-      }
-      const data = await runRef.current();
-      if (alive.current) setState({ data, loading: false, error: null });
+      const data = await runRef.current(options);
+      if (live()) setState({ data, loading: false, error: null });
     } catch (error) {
-      if (alive.current) {
+      if (live()) {
         setState((previous) => ({
           data: previous.data,
           loading: false,
@@ -46,18 +65,24 @@ function useAsync<T>(
         }));
       }
     } finally {
-      if (alive.current) setRefreshing(false);
+      if (live() && mode === 'refresh') setRefreshing(false);
     }
   }, []);
 
+  const reload = useCallback(
+    (options?: RunOptions) => start(options ?? {}, 'refresh'),
+    [start],
+  );
+
   useEffect(() => {
-    alive.current = true;
-    void reload();
+    mounted.current = true;
+    // A disabled hook (a closed picker) must not spend the Open-Meteo quota.
+    if (enabled) void start({}, 'initial');
     return () => {
-      alive.current = false;
+      mounted.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, enabled]);
 
   return { ...state, reload, refreshing };
 }
@@ -71,7 +96,7 @@ export function useCurrentAir() {
       'jakarta-pusat',
     );
     recordReading(
-      { aqi: reading.aqi, observedAt: reading.observedAt },
+      { aqi: reading.aqi, observedAt: reading.observedAt, slug: 'jakarta-pusat' },
       {
         alertsEnabled: settings.notifMaster && settings.badAirAlerts,
         dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
@@ -89,10 +114,15 @@ export function useCurrentAir() {
  */
 export function useSelectedAir() {
   const { selected, settings } = useAppState();
-  return useAsync<CurrentReading>(async () => {
-    const reading = await fetchAirSmart(selected.location, selected.slug);
+  return useAsync<CurrentReading>(async (options) => {
+    const reading = await fetchAirSmart(selected.location, selected.slug, options);
     recordReading(
-      { aqi: reading.aqi, observedAt: reading.observedAt, place: selected.name },
+      {
+        aqi: reading.aqi,
+        observedAt: reading.observedAt,
+        place: selected.name,
+        slug: selected.slug,
+      },
       {
         alertsEnabled: settings.notifMaster && settings.badAirAlerts,
         dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
@@ -115,7 +145,7 @@ export function useSelectedAir() {
 export function useSelectedHistory(pastDays: number) {
   const { selected } = useAppState();
   return useAsync<DayAqi[]>(
-    () => fetchHistorySmart(pastDays, selected.location, selected.slug),
+    (options) => fetchHistorySmart(pastDays, selected.location, selected.slug, options),
     [pastDays, selected.slug, selected.location.latitude, selected.location.longitude],
   );
 }
@@ -125,26 +155,31 @@ export type DirectoryEntry = { slug: string; name: string; aqi: number };
 /**
  * AQI for every pickable location, so the picker can show live numbers. Five
  * one-field requests, cached for 5 minutes each by the API layer.
+ *
+ * Pass `enabled: false` while the picker is closed: mounting the sheet's host
+ * screen used to spend those five calls on app start even when nobody ever
+ * opened the picker.
  */
-export function useLocationDirectory() {
+export function useLocationDirectory({ enabled = true }: { enabled?: boolean } = {}) {
   return useAsync<DirectoryEntry[]>(
-    () =>
+    (options) =>
       Promise.all(
         ALL_LOCATIONS.map(async (entry) => ({
           slug: entry.slug,
           name: entry.name,
-          aqi: await fetchAqiSmart(entry.location, entry.slug),
+          aqi: await fetchAqiSmart(entry.location, entry.slug, options),
         })),
       ),
     [],
+    enabled,
   );
 }
 
 /** Full reading (AQI + weather + pollutants) for any coordinate pair. */
 export function useLocationAir(location: Coordinates | null, slug?: string) {
-  return useAsync<CurrentReading>(async () => {
+  return useAsync<CurrentReading>(async (options) => {
     if (!location) throw new Error('Lokasi tidak dikenal');
-    return fetchAirSmart(location, slug);
+    return fetchAirSmart(location, slug, options);
   }, [location?.latitude, location?.longitude, slug]);
 }
 
@@ -154,7 +189,10 @@ export function useLocationAir(location: Coordinates | null, slug?: string) {
  * costs a single request.
  */
 export function useIndonesiaRanking() {
-  return useAsync<IndonesiaReading>(() => fetchIndonesiaAqi(), []);
+  return useAsync<IndonesiaReading>(
+    (options) => fetchIndonesiaAqi({ force: options?.force }),
+    [],
+  );
 }
 
 /**
@@ -163,10 +201,11 @@ export function useIndonesiaRanking() {
  * list triggers one fetch, not one per render; a failure leaves the screen
  * without deltas instead of replacing it with an error.
  */
-export function useCityTrends(points: TrendPoint[]) {
+export function useCityTrends(points: TrendPoint[], enabled = true) {
   const key = points.map((point) => point.slug).join(',');
   return useAsync<Record<string, AqiTrend>>(
     () => (key ? fetchCityTrends(points) : Promise.resolve({})),
     [key],
+    enabled,
   );
 }

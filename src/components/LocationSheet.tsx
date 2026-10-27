@@ -26,9 +26,16 @@ import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/t
  */
 export function LocationSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { selected, favorites } = useAppState();
-  const directory = useLocationDirectory();
+  // Only fetch the five live AQI chips once the sheet is actually open.
+  const directory = useLocationDirectory({ enabled: visible });
   const [query, setQuery] = useState('');
-  const { locating, error: locationError, locate } = useGeolocation();
+  const {
+    locating,
+    error: locationError,
+    needsSettings,
+    openSettings,
+    locate,
+  } = useGeolocation();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
 
@@ -72,7 +79,22 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
         value={selected.slug === 'lokasi-saya' ? 'Aktif' : undefined}
         onPress={locating ? undefined : () => void locateMe()}
       />
-      {locationError ? <Text style={styles.error}>{locationError}</Text> : null}
+      {locationError ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.error}>{locationError}</Text>
+          {/* Once the OS stops asking, a sentence alone is a dead end. */}
+          {needsSettings ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Buka pengaturan izin lokasi"
+              hitSlop={8}
+              onPress={openSettings}
+            >
+              <Text style={styles.settingsLink}>Buka pengaturan</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.search}>
         <Search size={18} color={colors.mutedText} strokeWidth={1.8} />
@@ -180,11 +202,22 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
 
 function createStyles(colors: ThemeColors) {
   return {
+    errorBox: {
+      paddingHorizontal: 6,
+      paddingBottom: 6,
+      gap: 2,
+      alignItems: 'flex-start' as const,
+    },
     error: {
       ...typo.caption,
       color: '#ef6b56',
-      paddingHorizontal: 6,
-      paddingBottom: 4,
+    },
+    settingsLink: {
+      ...typo.caption,
+      fontFamily: font.bold,
+      color: colors.accent,
+      textDecorationLine: 'underline' as const,
+      paddingVertical: 2,
     },
     search: {
       height: 46,

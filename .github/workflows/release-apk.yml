@@ -25,6 +25,20 @@ jobs:
           node-version: 24
           cache: npm
 
+      # The release name comes from app.json, not from the tag. A stale version
+      # would therefore overwrite the previous release instead of creating a new
+      # one — which is exactly how a debug-signed APK ended up shipped before.
+      - name: Check the tag matches app.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./app.json').expo.version")"
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME tidak cocok dengan version di app.json ($VERSION). Naikkan version di app.json, lalu pakai tag v$VERSION."
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME cocok dengan app.json."
+
       - name: Install dependencies
         run: npm ci
 
@@ -32,6 +46,51 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # Android only accepts an update signed with the same key as the installed
+      # app, so a release APK that is debug-signed strands every user who
+      # installed it. It is therefore built from the repository secrets or not
+      # built at all.
+      - name: Prepare release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          [ -n "${KEYSTORE_BASE64:-}" ] || missing+=("ANDROID_KEYSTORE_BASE64")
+          [ -n "${KEYSTORE_PASSWORD:-}" ] || missing+=("ANDROID_KEYSTORE_PASSWORD")
+          [ -n "${KEY_ALIAS:-}" ] || missing+=("ANDROID_KEY_ALIAS")
+          [ -n "${KEY_PASSWORD:-}" ] || missing+=("ANDROID_KEY_PASSWORD")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Secret signing belum lengkap: ${missing[*]}. Tambahkan di Settings → Secrets and variables → Actions (lihat README → Rilis APK)."
+            echo "Build dihentikan supaya tidak ada APK debug-signed yang terbit dan tidak bisa di-update."
+            exit 1
+          fi
+
+          # Outside the workspace on purpose: the key can never be committed or
+          # uploaded as a build artifact by accident.
+          KEYSTORE_PATH="$RUNNER_TEMP/awanin-release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+
+          # Fail now rather than after a 20-minute build if the secret values do
+          # not actually open the keystore.
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$KEYSTORE_PASSWORD" \
+              -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::Keystore tidak bisa dibuka dengan ANDROID_KEYSTORE_PASSWORD + ANDROID_KEY_ALIAS yang diberikan."
+            exit 1
+          fi
+
+          {
+            echo "AWANIN_KEYSTORE_FILE=$KEYSTORE_PATH"
+            echo "AWANIN_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "AWANIN_KEY_ALIAS=$KEY_ALIAS"
+            echo "AWANIN_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
 
       - name: Generate native Android project
         run: npx expo prebuild -p android --no-install
@@ -41,6 +100,38 @@ jobs:
       - name: Build release APK
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon --console=plain
+
+      # The plugin falls back to the template's debug keystore when no keystore
+      # is configured; this proves which key actually signed the file.
+      - name: Verify the APK is signed with the release key
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK release tidak ditemukan di $APK"
+            exit 1
+          fi
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner tidak ditemukan di $SDK_ROOT/build-tools"
+            exit 1
+          fi
+
+          normalize() { tr '[:upper:]' '[:lower:]' | tr -d ' :'; }
+
+          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK" \
+            | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2; exit}' | normalize)"
+          EXPECTED="$(keytool -list -v -keystore "$AWANIN_KEYSTORE_FILE" \
+            -storepass "$AWANIN_KEYSTORE_PASSWORD" -alias "$AWANIN_KEY_ALIAS" \
+            | awk -F': ' '/SHA256:/ {print $2; exit}' | normalize)"
+
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::APK tidak ditandatangani dengan keystore rilis (apk=$ACTUAL keystore=$EXPECTED)."
+            exit 1
+          fi
+          echo "APK ditandatangani dengan sertifikat rilis: $ACTUAL"
 
       - name: Upload APK to GitHub Release
         env:
@@ -58,6 +149,8 @@ jobs:
               --notes "APK Android Awanin ${VERSION} — build release otomatis dari GitHub Actions.
 
           **Cara pasang:** unduh file \`awanin-${VERSION}.apk\`, buka di ponsel Android, dan izinkan pemasangan dari sumber tidak dikenal bila diminta.
+
+          **Catatan update:** APK ini ditandatangani dengan keystore rilis Awanin, jadi bisa dipasang langsung di atas versi sebelumnya. Kalau kamu memasang APK lama yang bertanda tangan debug, uninstall dulu sekali sebelum memasang versi ini.
 
           Data kualitas udara & cuaca oleh [Open-Meteo](https://open-meteo.com/). Kode sumber: repositori ini."
           fi

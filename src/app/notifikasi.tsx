@@ -166,7 +166,9 @@ export default function NotifikasiScreen() {
                     markRead(entry.id);
                     router.push({
                       pathname: '/lokasi/[slug]',
-                      params: { slug: locationSlug(entry.place) },
+                      // Stored at write time; the fallback only covers an item
+                      // persisted before `slug` existed.
+                      params: { slug: entry.slug || locationSlug(entry.place) },
                     });
                   }}
                   style={({ pressed }) => [styles.feedItem, pressed && styles.pressed]}
@@ -190,7 +192,18 @@ export default function NotifikasiScreen() {
               </View>
             ))}
           </Card>
-        ) : null}
+        ) : (
+          /* A fresh install has no feed until an AQI category actually changes;
+             leaving the section out looked like a broken screen. */
+          <Card style={styles.empty}>
+            <BellRing size={20} color={colors.accent} strokeWidth={1.8} />
+            <Text style={styles.emptyTitle}>Belum ada notifikasi</Text>
+            <Text style={styles.emptyBody}>
+              Awanin mencatat perubahan kategori AQI di lokasi yang kamu pantau, dan
+              mengirim ringkasan harian kalau “Update Cuaca” dinyalakan.
+            </Text>
+          </Card>
+        )}
 
         <Card style={styles.server}>
           <View style={styles.serverHead}>
@@ -395,6 +408,19 @@ function createStyles(colors: ThemeColors) {
     feed: {
       padding: 14,
       gap: 10,
+    },
+    empty: {
+      padding: 16,
+      gap: 6,
+      alignItems: 'flex-start' as const,
+    },
+    emptyTitle: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    emptyBody: {
+      ...typo.caption,
+      color: colors.mutedText,
     },
     feedHead: {
       flexDirection: 'row' as const,

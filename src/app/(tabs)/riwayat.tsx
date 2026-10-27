@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Line, Path } from 'react-native-svg';
 import { ArrowLeft, ChevronDown, MapPin } from 'lucide-react-native';
@@ -141,7 +141,23 @@ export default function RiwayatScreen() {
     : 0;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          // `force` matters here: the daily series is cached for 15 minutes, so
+          // without it a pull returned the exact same bars.
+          refreshing={history.refreshing || air.refreshing}
+          onRefresh={() => {
+            void history.reload({ force: true });
+            void air.reload({ force: true });
+          }}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+        />
+      }
+    >
       <View style={{ paddingTop: topInset }}>
         <DeviceStatusBar />
       </View>

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { Tabs, router, usePathname, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -10,6 +10,7 @@ import {
   type LucideProps,
 } from 'lucide-react-native';
 
+import { Text } from '@/components/Text';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, spacing, type ThemeColors } from '@/theme/tokens';
 

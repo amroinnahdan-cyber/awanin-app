@@ -1,16 +1,19 @@
 {
   "expo": {
-    "name": "awanin-app",
+    "name": "Awanin",
     "slug": "awanin-app",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scheme": "awanin",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amroinnahdan.awanin",
+      "buildNumber": "2"
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#f5f9ff",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -34,7 +37,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/logo-mark.png",
           "color": "#1854c8"
         }
       ],
@@ -42,6 +45,20 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Awanin memakai lokasi perangkat untuk membaca kualitas udara di sekitarmu."
+        }
+      ],
+      "./plugins/withReleaseSigning",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/logo-mark.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#f6fbff",
+          "dark": {
+            "image": "./assets/logo-mark.png",
+            "backgroundColor": "#0b2038"
+          }
         }
       ]
     ],

@@ -142,3 +142,10 @@ export const shadow: ViewStyle = {
 
 /** Content column width (390 - 2 * 20) */
 export const CONTENT_WIDTH = 350;
+
+/**
+ * Upper bound for the OS font scale inside fixed-size chrome (tab bar, ring,
+ * forecast cells, chips). 1.3 is the largest multiplier every one of those
+ * boxes still holds; body copy is free to scale past it.
+ */
+export const MAX_FONT_SCALE = 1.3;

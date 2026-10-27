@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 
+import { Text } from '@/components/Text';
 import { TrendDelta } from '@/components/TrendDelta';
 import { Card, InlineError, SectionTitle, Skeleton } from '@/components/ui';
 import { useCityTrends } from '@/hooks/useAirQuality';

@@ -43,13 +43,23 @@ function cacheKeyFor(slug: string | undefined, location: Coordinates): string {
   return `${location.latitude.toFixed(3)},${location.longitude.toFixed(3)}`;
 }
 
+/**
+ * `force` is pull-to-refresh: skip every TTL cache. The backend keeps its own
+ * short cache and exposes no bypass, so a forced read goes straight to
+ * Open-Meteo — otherwise the refresh would return the identical payload and the
+ * screen would look frozen.
+ */
+export type FetchOptions = { force?: boolean };
+
 export async function fetchAirSmart(
   location: Coordinates,
   slug?: string,
+  options: FetchOptions = {},
 ): Promise<CurrentReading> {
   const cacheKey = cacheKeyFor(slug, location);
+  const force = options.force === true;
 
-  if (backendConfigured()) {
+  if (backendConfigured() && !force) {
     try {
       const { reading, hourly, forecast } = await fetchAirFromBackend(
         location.latitude,
@@ -65,8 +75,8 @@ export async function fetchAirSmart(
 
   try {
     const [reading, bundle] = await Promise.all([
-      fetchCurrentReading(location),
-      fetchForecastBundle(location),
+      fetchCurrentReading(location, force),
+      fetchForecastBundle(location, force),
     ]);
     const merged: CurrentReading = {
       ...reading,
@@ -94,8 +104,10 @@ export async function fetchAirSmart(
 export async function fetchAqiSmart(
   location: Coordinates,
   slug?: string,
+  options: FetchOptions = {},
 ): Promise<number> {
-  if (backendConfigured()) {
+  const force = options.force === true;
+  if (backendConfigured() && !force) {
     try {
       const { reading } = await fetchAirFromBackend(location.latitude, location.longitude);
       return reading.aqi;
@@ -103,22 +115,23 @@ export async function fetchAqiSmart(
       // fall through
     }
   }
-  return fetchAqiAt(location);
+  return fetchAqiAt(location, force);
 }
 
 export async function fetchHistorySmart(
   pastDays: number,
   location: Coordinates,
   slug?: string,
+  options: FetchOptions = {},
 ): Promise<DayAqi[]> {
-  if (backendConfigured() && slug && KNOWN_SLUGS.has(slug)) {
+  if (!options.force && backendConfigured() && slug && KNOWN_SLUGS.has(slug)) {
     try {
       return await fetchHistoryFromBackend(slug, pastDays);
     } catch {
       // fall through
     }
   }
-  return fetchDailyAqi(pastDays, location);
+  return fetchDailyAqi(pastDays, location, options.force === true);
 }
 
 /** Exposed for the location sheet / onboarding copy. */

@@ -88,8 +88,11 @@ export default function BerandaScreen() {
         <RefreshControl
           refreshing={air.refreshing}
           onRefresh={() => {
-            void air.reload();
-            void national.reload();
+            // `force` skips the 5-minute API cache; without it a pull within
+            // that window re-rendered identical numbers and felt broken.
+            void air.reload({ force: true });
+            void national.reload({ force: true });
+            void history.reload({ force: true });
           }}
           tintColor={colors.accent}
           colors={[colors.accent]}

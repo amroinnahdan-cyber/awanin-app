@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -68,7 +69,7 @@ export default function SekitarScreen() {
   const directory = useLocationDirectory();
   const selectedAir = useSelectedAir();
   const { selected, deviceLocation } = useAppState();
-  const { locating, error: locateError, locate } = useGeolocation();
+  const { locating, error: locateError, needsSettings, openSettings, locate } = useGeolocation();
   const [filter, setFilter] = useState<FilterKey>('semua');
 
   const deviceCoords = deviceLocation?.location ?? null;
@@ -112,7 +113,23 @@ export default function SekitarScreen() {
   const deviceCategory = deviceAqi === undefined ? null : categoryFor(deviceAqi);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          // `force` skips the 5-minute cache, so a pull really re-reads.
+          refreshing={directory.refreshing || deviceAir.refreshing}
+          onRefresh={() => {
+            void directory.reload({ force: true });
+            void selectedAir.reload({ force: true });
+            if (deviceCoords) void deviceAir.reload({ force: true });
+          }}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+        />
+      }
+    >
       <View style={{ paddingTop: topInset }}>
         <DeviceStatusBar />
       </View>
@@ -229,7 +246,23 @@ export default function SekitarScreen() {
             </Pressable>
           )}
 
-          {locateError ? <Text style={styles.error}>{locateError}</Text> : null}
+          {locateError ? (
+            <View style={styles.locationError}>
+              <Text style={styles.error}>{locateError}</Text>
+              {/* Denied permanently: the OS will not prompt again, so offer the
+                  only route that can still fix it. */}
+              {needsSettings ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Buka pengaturan izin lokasi"
+                  hitSlop={8}
+                  onPress={openSettings}
+                >
+                  <Text style={styles.retry}>Buka pengaturan</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           {/*
             `useLocationAir` keeps the previous error while a new request is in
             flight, so gate on the request actually having finished — otherwise
@@ -407,9 +440,12 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 40,
     },
     header: {
-      height: 62,
+      // minHeight, not height: the title + subtitle stack measured 62px at the
+      // default font scale and overflowed once the OS font grew (46 + 36 at 2×).
+      minHeight: 62,
       paddingHorizontal: spacing.gutter,
       justifyContent: 'center' as const,
+      paddingVertical: 6,
     },
     headerTitle: {
       ...typo.title,
@@ -520,6 +556,11 @@ function createStyles(colors: ThemeColors) {
       color: colors.mutedText,
     },
     errorRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 8,
+    },
+    locationError: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 8,

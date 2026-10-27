@@ -1,6 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { Text } from '@/components/Text';
 import { useCountUp } from '@/components/motion';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, type as typo, type ThemeColors } from '@/theme/tokens';
@@ -49,7 +50,14 @@ export function AqiRing({ value, progress, categoryColor, badge, size = 174 }: A
   const shown = typeof value === 'number' ? counted : value;
 
   return (
-    <View style={{ width: size, height: size }} accessibilityLabel={`Indeks kualitas udara ${value}`}>
+    <View
+      style={{ width: size, height: size }}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`Indeks kualitas udara ${value}${
+        badge ? `, kategori ${badge.label}` : ''
+      }`}
+    >
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Path
           d={arcPath(size / 2, size / 2, r, START_ANGLE, START_ANGLE + SWEEP)}

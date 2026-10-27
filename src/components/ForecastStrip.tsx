@@ -1,5 +1,6 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
+import { Text } from '@/components/Text';
 import { Card, SectionTitle, Skeleton } from '@/components/ui';
 import { dayLabel, shortDate } from '@/lib/aqi';
 import type { DayAqi } from '@/api/openMeteo';

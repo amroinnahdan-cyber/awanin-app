@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Dumbbell } from 'lucide-react-native';
 
 import type { HourlyForecastPoint } from '@/api/openMeteo';
+import { Text } from '@/components/Text';
 import { Card, SectionTitle, Skeleton } from '@/components/ui';
 import { categoryFor, readableOn } from '@/lib/aqi';
 import {

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
@@ -111,7 +112,9 @@ export default function ProfilScreen() {
     {
       key: 'tentang',
       label: 'Tentang Awanin',
-      value: 'v1.0.0',
+      // Read from app.json so the row cannot drift from the build again (it sat
+      // at v1.0.0 while the released APK was 1.1.0).
+      value: `v${Constants.expoConfig?.version ?? '1.0.0'}`,
       icon: Info,
       onPress: () => router.push('/tentang'),
     },
