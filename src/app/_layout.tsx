@@ -9,6 +9,7 @@ import { Inter_400Regular, Inter_700Bold, Inter_800ExtraBold } from '@expo-googl
 
 import { Onboarding } from '@/components/Onboarding';
 import { SplashScreen } from '@/components/SplashScreen';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { attachNotificationNavigation } from '@/lib/push';
 import { syncPushSubscription } from '@/lib/subscription';
 import { hydrateAppState, useAppState } from '@/state/app';
@@ -41,6 +42,7 @@ export default function RootLayout() {
 function RootShell() {
   const { colors, scheme } = useTheme();
   const { settings, selected } = useAppState();
+  const { locateSilently } = useGeolocation();
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [splashVisible, setSplashVisible] = useState(true);
@@ -57,6 +59,14 @@ function RootShell() {
       alive = false;
     };
   }, []);
+
+  // After onboarding is done, one quiet read moves the home screen onto the
+  // device when the user never picked a place by hand. No prompt, no error
+  // UI: if permission is missing or the fix stalls, the current place stays.
+  useEffect(() => {
+    if (!hydrated || !settings.onboarded) return;
+    void locateSilently();
+  }, [hydrated, settings.onboarded, locateSilently]);
 
   // Mirror notification settings into the backend. Debounced because settings
   // and the selected location are changed from several sheets.

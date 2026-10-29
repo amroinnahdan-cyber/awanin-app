@@ -16,6 +16,7 @@
  * Meteo query on the server for no benefit.
  */
 import { INDONESIA_CITIES } from '@/data/indonesiaCities';
+import { OpenMeteoTimeoutError } from '@/api/openMeteo';
 import {
   parseAqiBatch,
   parseHourlyTrend,
@@ -61,7 +62,7 @@ async function load(): Promise<IndonesiaReading> {
   // for a hundred points.
   url.searchParams.set('current', 'us_aqi');
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithTimeout(url.toString());
   if (!response.ok) {
     throw new Error(`Open-Meteo ${response.status} ${response.statusText}`);
   }
@@ -76,6 +77,28 @@ async function load(): Promise<IndonesiaReading> {
   cache = value;
   cacheAt = Date.now();
   return value;
+}
+
+/**
+ * Same 15-second deadline as the per-location reads: without it the nationwide
+ * batch can hang a screen on its skeleton forever, with no error and no retry.
+ * `fetchCityTrends` reuses it below.
+ */
+const BATCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BATCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new OpenMeteoTimeoutError();
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const trendCache = new Map<string, { trend: AqiTrend; at: number }>();
@@ -113,7 +136,7 @@ export async function fetchCityTrends(
     url.searchParams.set('past_hours', '25');
     url.searchParams.set('forecast_hours', '1');
 
-    const response = await fetch(url.toString());
+    const response = await fetchWithTimeout(url.toString());
     if (!response.ok) {
       throw new Error(`Open-Meteo ${response.status} ${response.statusText}`);
     }

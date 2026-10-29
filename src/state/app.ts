@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
 
 import { JAKARTA_PUSAT, POPULAR_LOCATIONS, type Coordinates } from '@/api/openMeteo';
-import { INDONESIA_CITIES } from '@/data/indonesiaCities';
-import { timezoneForCoordinates } from '@/lib/geo';
+import { INDONESIA_CITIES, type IndonesiaCity } from '@/data/indonesiaCities';
+import { distanceKm, timezoneForCoordinates } from '@/lib/geo';
 import { loadPersisted, savePersisted } from '@/lib/persist';
 
 /**
@@ -79,6 +79,13 @@ type AppState = {
   selected: AppLocation;
   /** Last position read from the device GPS, if any — drawn on the map. */
   deviceLocation: AppLocation | null;
+  /**
+   * True after the user picks a place by hand (sheet, Sekitar list, Indonesia
+   * screen, detail CTA). While false, a fresh GPS fix also moves `selected`,
+   * so the home screen follows the device instead of sitting on Jakarta Pusat.
+   * Persisted so a restart does not undo an explicit choice.
+   */
+  manualOverride: boolean;
   favorites: string[];
   settings: AppSettings;
 };
@@ -97,6 +104,7 @@ function defaultState(): AppState {
   return {
     selected: HOME_LOCATION,
     deviceLocation: null,
+    manualOverride: false,
     favorites: ['monas'],
     settings: { ...DEFAULT_SETTINGS },
   };
@@ -110,6 +118,7 @@ type PersistedAppState = {
   selectedSlug?: string;
   selected?: PersistedLocation & { slug: string };
   deviceLocation?: PersistedLocation;
+  manualOverride?: boolean;
   favorites?: string[];
   settings?: Partial<AppSettings>;
 };
@@ -149,6 +158,7 @@ function emit() {
           longitude: state.deviceLocation.location.longitude,
         }
       : undefined,
+    manualOverride: state.manualOverride,
     favorites: state.favorites,
     settings: state.settings,
   } satisfies PersistedAppState);
@@ -196,33 +206,70 @@ export function findLocation(slug: string): AppLocation | null {
 export const DEVICE_LOCATION_SLUG = 'lokasi-saya';
 
 /**
+ * Nearest bundled city to a GPS fix, so the selected location reads "Bekasi"
+ * instead of a stale geocoder label. Beyond 60 km the fix is genuinely
+ * somewhere unnamed, so the caller keeps the reverse-geocode name.
+ */
+const NEAREST_NAME_KM = 60;
+
+function nearestKnownCity(latitude: number, longitude: number): IndonesiaCity | null {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  let nearest: { city: IndonesiaCity; km: number } | null = null;
+  for (const city of INDONESIA_CITIES) {
+    const km = distanceKm(latitude, longitude, city.latitude, city.longitude);
+    if (!nearest || km < nearest.km) nearest = { city, km };
+  }
+  return nearest && nearest.km <= NEAREST_NAME_KM ? nearest.city : null;
+}
+
+/**
  * GPS result, kept as a normal AppLocation so every screen keeps working.
  * Stored as `deviceLocation` too, so the map keeps a "Lokasi saya" pin (and the
  * ability to return to it) after the user picks a landmark. Coordinates are
  * persisted with the rest of the state.
+ *
+ * The name prefers the nearest known city (Bekasi, Makassar, …) over a raw
+ * reverse-geocode label: on a device whose geocoder answers with a stale or
+ * foreign region ("Santa Clara County") the city table still says where the
+ * fix really is, and when the user is abroad the device zone is the fallback.
  */
 export function selectCustomLocation(name: string, latitude: number, longitude: number) {
-  const next: AppLocation = {
+  const nearest = nearestKnownCity(latitude, longitude);
+  const resolved: AppLocation = {
     slug: DEVICE_LOCATION_SLUG,
-    name,
-    area: 'Lokasi perangkat',
+    name: nearest?.name ?? name,
+    area: nearest ? nearest.province : 'Lokasi perangkat',
     location: { latitude, longitude, timezone: timezoneForCoordinates(latitude, longitude) },
   };
-  state = { ...state, selected: next, deviceLocation: next };
+  // A fresh fix always refreshes the stored device pin. It also moves the
+  // active screen unless the user has explicitly picked a place — that is
+  // what makes the home screen follow Bekasi after "Deteksi lokasi saya"
+  // instead of sitting on Jakarta Pusat.
+  state = {
+    ...state,
+    selected: state.manualOverride ? state.selected : resolved,
+    deviceLocation: resolved,
+  };
   emit();
 }
 
 /** Re-select the stored device position without a new GPS read. */
 export function selectDeviceLocation() {
-  if (!state.deviceLocation || state.deviceLocation.slug === state.selected.slug) return;
-  state = { ...state, selected: state.deviceLocation };
+  if (!state.deviceLocation) return;
+  // No slug-equality shortcut here: `deviceLocation` is refreshed by every
+  // fix while `selected` may still point at the previous one, and both share
+  // the `lokasi-saya` slug — comparing slugs would keep the stale fix.
+  state = { ...state, selected: state.deviceLocation, manualOverride: false };
   emit();
 }
 
 export function selectLocation(slug: string) {
   const next = findLocation(slug);
-  if (!next || next.slug === state.selected.slug) return;
-  state = { ...state, selected: next };
+  if (!next) return;
+  // Same stale-slug trap as above: the device slug is shared by every fix, so
+  // re-selecting it must always refresh `selected` to the newest coordinates.
+  if (next.slug === state.selected.slug && next.slug !== DEVICE_LOCATION_SLUG) return;
+  state = { ...state, selected: next, manualOverride: next.slug !== DEVICE_LOCATION_SLUG };
   emit();
 }
 
@@ -250,6 +297,15 @@ export function resetAppState() {
   emit();
 }
 
+/**
+ * Whether a quiet startup read may also move the active screen: only when the
+ * user never picked a place by hand. A stored or fresh device pin is always
+ * kept either way, so Sekitar can still show it.
+ */
+export function shouldFollowDevice(): boolean {
+  return !state.manualOverride;
+}
+
 /** Hydrate from storage. Called once from the root layout before first paint. */
 export async function hydrateAppState(): Promise<void> {
   const saved = await loadPersisted<PersistedAppState>('app');
@@ -263,6 +319,7 @@ export async function hydrateAppState(): Promise<void> {
     deviceLocation: saved.deviceLocation
       ? toAppLocation(DEVICE_LOCATION_SLUG, saved.deviceLocation)
       : null,
+    manualOverride: saved.manualOverride ?? saved.selectedSlug !== DEVICE_LOCATION_SLUG,
     favorites: Array.isArray(saved.favorites) ? saved.favorites : state.favorites,
     settings: { ...DEFAULT_SETTINGS, ...saved.settings },
   };

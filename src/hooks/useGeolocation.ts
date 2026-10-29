@@ -2,15 +2,20 @@ import { useCallback, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 
-import { selectCustomLocation } from '@/state/app';
+import { selectCustomLocation, shouldFollowDevice } from '@/state/app';
 
 /**
  * `getCurrentPositionAsync` has no timeout option of its own — its docs only
  * warn that resolving "may take several seconds" — so with no provider fix it
  * stays pending forever and the button spins without ever saying why. This is
- * the deadline after which we fall back to the last known position.
+ * the deadline after which we fall back to the last known position. The same
+ * stall happens to `reverseGeocodeAsync` on emulators with no network backing
+ * the geocoder, so naming gets its own (shorter) deadline below.
  */
 const FIX_TIMEOUT_MS = 12_000;
+
+/** Naming the fix must never block applying it: coordinates are the payload. */
+const REVERSE_GEOCODE_TIMEOUT_MS = 5_000;
 
 /** A cached fix older than this is too old to present as "lokasi terkini". */
 const LAST_KNOWN_MAX_AGE_MS = 15 * 60_000;
@@ -37,6 +42,14 @@ export type GeolocationState = {
   openSettings: () => void;
   /** Resolves true when a fix was read and applied to app state. */
   locate: () => Promise<boolean>;
+  /**
+   * One quiet read meant for app start: when permission is already granted and
+   * the user never picked a place by hand, the stored fix (or a fresh one) is
+   * applied so the home screen opens on the device instead of Jakarta Pusat.
+   * Never prompts, never surfaces errors — returns false when there is
+   * nothing to apply, so the home screen simply keeps its current place.
+   */
+  locateSilently: () => Promise<boolean>;
 };
 
 /** Rejected when a fix takes longer than `FIX_TIMEOUT_MS`. */
@@ -134,10 +147,14 @@ export function useGeolocation(): GeolocationState {
 
       let name = 'Lokasi saya';
       try {
-        const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const [place] = await withTimeout(
+          Location.reverseGeocodeAsync({ latitude, longitude }),
+          REVERSE_GEOCODE_TIMEOUT_MS,
+        );
         name = place?.district ?? place?.subregion ?? place?.city ?? name;
       } catch {
         // Reverse geocoding needs a network; the coordinates are still valid.
+        // A stall resolves with the fallback name instead of hanging the sheet.
       }
 
       selectCustomLocation(name, latitude, longitude);
@@ -150,5 +167,41 @@ export function useGeolocation(): GeolocationState {
     }
   }, []);
 
-  return { locating, error, needsSettings, openSettings, locate };
+  /**
+   * Startup companion to `locate`: restores a saved device pin first (no GPS,
+   * no prompt), then tries a quiet fresh read when permission already exists.
+   * The state layer decides whether the fix also moves the active screen, so
+   * an explicit Jakarta Pusat pick is never clobbered behind the user's back.
+   */
+  const locateSilently = useCallback(async (): Promise<boolean> => {
+    if (!shouldFollowDevice()) return false;
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      if (permission.status !== 'granted') return false;
+      const position = await withTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        FIX_TIMEOUT_MS,
+      ).catch(() =>
+        Location.getLastKnownPositionAsync({ maxAge: LAST_KNOWN_MAX_AGE_MS }),
+      );
+      if (!position) return false;
+      const { latitude, longitude } = position.coords;
+      let name = 'Lokasi saya';
+      try {
+        const [place] = await withTimeout(
+          Location.reverseGeocodeAsync({ latitude, longitude }),
+          REVERSE_GEOCODE_TIMEOUT_MS,
+        );
+        name = place?.district ?? place?.subregion ?? place?.city ?? name;
+      } catch {
+        // Same degradation as `locate`: coordinates win over the label.
+      }
+      selectCustomLocation(name, latitude, longitude);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  return { locating, error, needsSettings, openSettings, locate, locateSilently };
 }

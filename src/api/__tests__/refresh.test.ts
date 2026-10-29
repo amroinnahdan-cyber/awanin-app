@@ -1,5 +1,5 @@
 import { fetchAirSmart } from '@/api/gateway';
-import { JAKARTA_PUSAT, clearRequestCache } from '@/api/openMeteo';
+import { JAKARTA_PUSAT, OpenMeteoTimeoutError, clearRequestCache } from '@/api/openMeteo';
 
 jest.mock('@/lib/offline', () => ({
   saveReadingCache: jest.fn(),
@@ -91,5 +91,36 @@ describe('fetchAirSmart', () => {
     expect(reading.aqi).toBe(66);
     expect(reading.stale).toBe(true);
     expect(reading.source).toBe('cache');
+  });
+
+  it('fails with a timeout error instead of hanging when Open-Meteo stalls', async () => {
+    jest.useFakeTimers();
+    try {
+      // A request that never settles: without the deadline the await below
+      // would hang the screen on "memuat" forever.
+      global.fetch = jest.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            );
+          }),
+      ) as unknown as typeof fetch;
+
+      const pending = fetchAirSmart(JAKARTA_PUSAT, 'jakarta-pusat', { force: true });
+      const assertion = pending.then(
+        () => {
+          throw new Error('expected the stalled request to fail');
+        },
+        (error: unknown) => {
+          expect(error).toBeInstanceOf(OpenMeteoTimeoutError);
+        },
+      );
+      await jest.advanceTimersByTimeAsync(16_000);
+      await assertion;
+      await pending.catch(() => {});
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

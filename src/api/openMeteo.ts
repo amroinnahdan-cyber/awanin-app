@@ -140,8 +140,42 @@ export function clearRequestCache() {
   cache.clear();
 }
 
+/**
+ * Every Open-Meteo read shares this deadline. Without it a request can stay
+ * pending forever on a broken connection — the detail screen then sits on
+ * "memuat" with a "—" ring and no error, which is exactly what the emulator
+ * screenshot showed. The timeout turns that into a normal error the gateway
+ * can fall back to cache with, or the screen can show with a retry button.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Rejected when an Open-Meteo request takes longer than `REQUEST_TIMEOUT_MS`.
+ */
+export class OpenMeteoTimeoutError extends Error {
+  constructor() {
+    super('Open-Meteo tidak merespons dalam 15 detik. Periksa koneksi, lalu coba lagi.');
+    this.name = 'OpenMeteoTimeoutError';
+  }
+}
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new OpenMeteoTimeoutError();
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function requestJson(url: string): Promise<ApiResponse> {
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(`Open-Meteo ${response.status} ${response.statusText}`);
   }
