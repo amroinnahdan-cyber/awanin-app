@@ -2,7 +2,7 @@
   "expo": {
     "name": "Awanin",
     "slug": "awanin-app",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "scheme": "awanin",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,10 +10,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.amroinnahdan.awanin",
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#f5f9ff",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -64,6 +64,16 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "50ba6b97-5415-4855-83c1-8b2247b896c7"
+      }
     }
   }
 }
