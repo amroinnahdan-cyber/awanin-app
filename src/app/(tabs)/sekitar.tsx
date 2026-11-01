@@ -23,7 +23,8 @@ import {
   useSelectedAir,
 } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor, readableOn } from '@/lib/aqi';
+import { categoryFor, displayIndexFor, indexSpoken, readableOn } from '@/lib/aqi';
+import { displayedAqi } from '@/lib/indonesia';
 import { relativeTime } from '@/lib/format';
 import { distanceKm, formatCoordinates, formatDistance } from '@/lib/geo';
 import { placeImage } from '@/lib/placeImages';
@@ -95,7 +96,8 @@ export default function SekitarScreen() {
   const { colors } = useTheme();
   const directory = useLocationDirectory();
   const selectedAir = useSelectedAir();
-  const { selected, deviceLocation } = useAppState();
+  const { selected, deviceLocation, settings } = useAppState();
+  const scale = settings.indexScale;
   const { locating, error: locateError, needsSettings, openSettings, locate } = useGeolocation();
   const [filter, setFilter] = useState<FilterKey>('semua');
 
@@ -111,7 +113,9 @@ export default function SekitarScreen() {
     return map;
   }, [directory.data]);
 
-  const deviceAqi = deviceCoords ? (deviceAir.data?.aqi ?? aqiBySlug.get(DEVICE_LOCATION_SLUG)) : undefined;
+  const deviceAqi = deviceCoords
+    ? (displayIndexFor(deviceAir.data, scale) ?? aqiBySlug.get(DEVICE_LOCATION_SLUG))
+    : undefined;
 
   // A hundred cities cost one weighted request, so it is only worth paying for
   // once a fix exists — without one the list stays on the five monitored points.
@@ -119,9 +123,10 @@ export default function SekitarScreen() {
 
   const cityAqi = useMemo(() => {
     const map = new Map<string, number>();
-    for (const reading of ranking.data?.readings ?? []) map.set(reading.slug, reading.aqi);
+    for (const reading of ranking.data?.readings ?? [])
+      map.set(reading.slug, displayedAqi(reading, scale));
     return map;
-  }, [ranking.data]);
+  }, [ranking.data, scale]);
 
   const rows = useMemo<NearbyRow[]>(() => {
     if (!deviceCoords) {
@@ -184,10 +189,11 @@ export default function SekitarScreen() {
     (usesDeviceLocation ? deviceAqi : undefined) ??
     aqiBySlug.get(selected.slug) ??
     cityAqi.get(selected.slug) ??
-    selectedAir.data?.aqi;
-  const selectedCategory = selectedAqi === undefined ? null : categoryFor(selectedAqi);
+    displayIndexFor(selectedAir.data, scale) ??
+    undefined;
+  const selectedCategory = selectedAqi === undefined ? null : categoryFor(selectedAqi, scale);
 
-  const deviceCategory = deviceAqi === undefined ? null : categoryFor(deviceAqi);
+  const deviceCategory = deviceAqi === undefined ? null : categoryFor(deviceAqi, scale);
 
   /** Numbers missing, list still usable: the two requests that feed the badges. */
   const aqiIncomplete =
@@ -272,7 +278,7 @@ export default function SekitarScreen() {
               </Text>
               <View style={styles.readingText}>
                 <Text style={styles.readingCategory}>
-                  {deviceCategory ? `AQI · ${deviceCategory.label}` : 'Memuat indeks…'}
+                  {deviceCategory ? `${indexSpoken(scale)} · ${deviceCategory.label}` : 'Memuat indeks…'}
                 </Text>
                 <Text style={styles.readingMeta}>
                   {deviceAir.data
@@ -424,7 +430,7 @@ export default function SekitarScreen() {
           ) : (
             visibleRows.map((row, index) => {
                 const { slug, name, area, km, aqi } = row;
-                const category = aqi === undefined ? null : categoryFor(aqi);
+                const category = aqi === undefined ? null : categoryFor(aqi, scale);
                 const isSelected = selected.slug === slug;
                 const meta = km === null ? area : `${area} · ${formatDistance(km)}`;
 
@@ -441,7 +447,7 @@ export default function SekitarScreen() {
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`${name}, ${
-                          aqi === undefined ? 'memuat indeks' : `AQI ${aqi}`
+                          aqi === undefined ? 'memuat indeks' : `${indexSpoken(scale)} ${aqi}`
                         }, ${meta}. Pilih lokasi`}
                         accessibilityState={{ selected: isSelected }}
                         onPress={() => selectLocation(slug)}
@@ -526,7 +532,7 @@ export default function SekitarScreen() {
                 style={[styles.selectedAqi, { color: selectedCategory?.color ?? colors.mutedText }]}
               >
                 {selectedCategory
-                  ? `AQI ${selectedAqi} · ${selectedCategory.label}`
+                  ? `${indexSpoken(scale)} ${selectedAqi} · ${selectedCategory.label}`
                   : selectedAir.error
                     ? 'Gagal memuat indeks'
                     : 'Memuat indeks…'}

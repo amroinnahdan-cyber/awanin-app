@@ -25,7 +25,8 @@ import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/t
  * working without a parallel code path.
  */
 export function LocationSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { selected, favorites } = useAppState();
+  const { selected, favorites, settings } = useAppState();
+  const scale = settings.indexScale;
   // Only fetch the five live AQI chips once the sheet is actually open.
   const directory = useLocationDirectory({ enabled: visible });
   const [query, setQuery] = useState('');
@@ -122,7 +123,7 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
 
       {results.map((entry) => {
         const aqi = aqiBySlug.get(entry.slug);
-        const category = aqi === undefined ? null : categoryFor(aqi);
+        const category = aqi === undefined ? null : categoryFor(aqi, scale);
         const isSelected = entry.slug === selected.slug;
         const isFavorite = favorites.includes(entry.slug);
         return (
@@ -191,8 +192,8 @@ export function LocationSheet({ visible, onClose }: { visible: boolean; onClose:
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Tidak ada lokasi “{query}”</Text>
           <Text style={styles.emptyBody}>
-            Awanin memantau lima titik di Jakarta. Coba Monas, Bundaran HI, GBK, atau Kota Tua —
-            atau pakai lokasi GPS-mu.
+            Daftar ini berisi lima titik di Jakarta: Monas, Bundaran HI, GBK, dan Kota Tua. Untuk
+            kota lain, buka layar Indonesia — atau pakai lokasi GPS-mu.
           </Text>
         </View>
       ) : null}

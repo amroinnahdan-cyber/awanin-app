@@ -406,9 +406,10 @@ tersedia, sehingga tidak ada lagi dua batang "0" di ujung grafik.
     (50 → 30%, 100 → 50%, 150 → 66%, 200 → 78%, 300 → 90%, 500 → 100%): rentang
     0–100 mendapat dua pertiga ruang visual. Legenda skala di bawahnya tetap linear
     berlabel angka, karena sumbu berlabel harus jujur.
-12. **Profil memakai data contoh lokal** (`USER_PROFILE` di `src/state/app.ts`).
-    Tidak ada sistem akun: identitas ini hanya tampilan dan bisa diganti tanpa
-    menyentuh backend, karena `deviceId` anonim yang dipakai untuk push.
+12. **Profil tidak lagi memakai identitas contoh.** Aplikasi ini tidak punya sistem
+    akun, jadi kartu di puncak layar Profil menampilkan identitas aplikasi (“Awanin —
+    Know Your Air”) alih-alih nama dan email contoh, yang dulu terbaca sebagai akun
+    orang lain di setiap perangkat. Push tetap memakai `deviceId` anonim.
 
 ## Catatan implementasi yang mudah terlewat
 

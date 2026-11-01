@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ChevronRight, ExternalLink } from 'lucide-react-native';
@@ -7,23 +8,40 @@ import { InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen'
 import { ATTRIBUTION } from '@/api/openMeteo';
 import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { openUrl } from '@/lib/share';
+import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
-const FACTS = [
-  { label: 'Versi', value: '1.1.0 (Expo)' },
-  { label: 'Sumber data', value: 'Open-Meteo' },
-  { label: 'Skala indeks', value: 'US AQI (0–500)' },
-  { label: 'Backend', value: 'Awanin API (opsional)' },
-  { label: 'Lokasi dipantau', value: '5 titik + GPS + 100 kota' },
-];
+/** Facts follow the user's scale choice, so the screen never outlives it. */
+function buildFacts(scale: 'us' | 'ispu') {
+  return [
+    // Read from app.json, like the Profil row, so the number cannot drift from the
+    // build again: this line sat at 1.1.0 after 1.2.0 shipped.
+    { label: 'Versi', value: `${Constants.expoConfig?.version ?? 'tidak diketahui'} (Expo)` },
+    { label: 'Sumber data', value: 'Open-Meteo' },
+    {
+      label: 'Skala indeks',
+      value:
+        scale === 'ispu'
+          ? 'ISPU — Permen LHK 14/2020 (0–500), perkiraan dari PM2.5'
+          : 'US AQI (0–500)',
+    },
+    { label: 'Backend', value: 'Awanin API (opsional)' },
+    { label: 'Lokasi dipantau', value: '5 titik + GPS + 100 kota' },
+  ];
+}
 
 export default function TentangScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const scale = useAppState().settings.indexScale;
+  const FACTS = buildFacts(scale);
 
   return (
-    <InfoScreen title="Tentang Awanin" subtitle="Pemantau kualitas udara Jakarta">
+    <InfoScreen
+      title="Tentang Awanin"
+      subtitle={`Pemantau kualitas udara di ${INDONESIA_CITIES.length} kota Indonesia`}
+    >
       <InfoSection>
         <View style={styles.identity}>
           <LinearGradient colors={[colors.sky, colors.tint]} style={styles.badge}>
@@ -52,8 +70,11 @@ export default function TentangScreen() {
           menit; pembacaan terakhir juga disimpan di perangkat untuk mode offline.
         </InfoParagraph>
         <InfoParagraph>
-          Indeks yang ditampilkan adalah US AQI, skala yang dipakai Open-Meteo untuk parameter
-          PM2.5, dengan ambang 50 / 100 / 150 / 200 / 300.
+          Indeks utama adalah US AQI, skala yang dipakai Open-Meteo untuk parameter PM2.5,
+          dengan ambang 50 / 100 / 150 / 200 / 300. Bila pilihan di Profil diganti ke ISPU,
+          aplikasi menghitungnya sendiri dari konsentrasi PM2.5 memakai tabel breakpoint
+          Permen LHK No. 14/2020 — jadi ISPU-nya adalah perkiraan terbaik dari model
+          Open-Meteo (per jam, bukan rata-rata 24 jam stasiun pemantauan).
         </InfoParagraph>
         <InfoParagraph>
           Layar “Indonesia” membaca {INDONESIA_CITIES.length} kota di 38 provinsi dalam satu

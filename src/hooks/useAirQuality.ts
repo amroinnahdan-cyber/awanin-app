@@ -9,6 +9,7 @@ import {
 import type { AqiTrend, TrendPoint } from '@/lib/indonesia';
 import { fetchAirSmart, fetchAqiSmart, fetchHistorySmart } from '@/api/gateway';
 import { ALL_LOCATIONS, useAppState } from '@/state/app';
+import { displayIndexFor } from '@/lib/aqi';
 import { recordReading } from '@/state/notifications';
 
 type AsyncState<T> = {
@@ -90,13 +91,20 @@ function useAsync<T>(
 /** Current AQI + weather for Jakarta Pusat; also feeds the notification store. */
 export function useCurrentAir() {
   const { settings } = useAppState();
+  const scale = settings.indexScale;
   return useAsync<CurrentReading>(async () => {
     const reading = await fetchAirSmart(
       { latitude: -6.1754, longitude: 106.8272, timezone: 'Asia/Jakarta' },
       'jakarta-pusat',
     );
     recordReading(
-      { aqi: reading.aqi, observedAt: reading.observedAt, slug: 'jakarta-pusat' },
+      {
+        aqi: reading.aqi,
+        index: displayIndexFor(reading, scale) ?? undefined,
+        scale,
+        observedAt: reading.observedAt,
+        slug: 'jakarta-pusat',
+      },
       {
         alertsEnabled: settings.notifMaster && settings.badAirAlerts,
         dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
@@ -104,7 +112,13 @@ export function useCurrentAir() {
       },
     );
     return reading;
-  }, [settings.notifMaster, settings.badAirAlerts, settings.weatherUpdate, settings.tipsHealth]);
+  }, [
+    scale,
+    settings.notifMaster,
+    settings.badAirAlerts,
+    settings.weatherUpdate,
+    settings.tipsHealth,
+  ]);
 }
 
 /**
@@ -114,11 +128,14 @@ export function useCurrentAir() {
  */
 export function useSelectedAir() {
   const { selected, settings } = useAppState();
+  const scale = settings.indexScale;
   return useAsync<CurrentReading>(async (options) => {
-    const reading = await fetchAirSmart(selected.location, selected.slug, options);
+    const reading = await fetchAirSmart(selected.location, selected.slug, options, scale);
     recordReading(
       {
         aqi: reading.aqi,
+        index: displayIndexFor(reading, scale) ?? undefined,
+        scale,
         observedAt: reading.observedAt,
         place: selected.name,
         slug: selected.slug,
@@ -134,6 +151,7 @@ export function useSelectedAir() {
     selected.slug,
     selected.location.latitude,
     selected.location.longitude,
+    scale,
     settings.notifMaster,
     settings.badAirAlerts,
     settings.weatherUpdate,
@@ -143,10 +161,11 @@ export function useSelectedAir() {
 
 /** History for the selected location, over any window Open-Meteo accepts (<=92). */
 export function useSelectedHistory(pastDays: number) {
-  const { selected } = useAppState();
+  const { selected, settings } = useAppState();
+  const scale = settings.indexScale;
   return useAsync<DayAqi[]>(
-    (options) => fetchHistorySmart(pastDays, selected.location, selected.slug, options),
-    [pastDays, selected.slug, selected.location.latitude, selected.location.longitude],
+    (options) => fetchHistorySmart(pastDays, selected.location, selected.slug, options, scale),
+    [pastDays, selected.slug, selected.location.latitude, selected.location.longitude, scale],
   );
 }
 
@@ -161,26 +180,32 @@ export type DirectoryEntry = { slug: string; name: string; aqi: number };
  * opened the picker.
  */
 export function useLocationDirectory({ enabled = true }: { enabled?: boolean } = {}) {
+  const { settings } = useAppState();
+  const scale = settings.indexScale;
   return useAsync<DirectoryEntry[]>(
     (options) =>
       Promise.all(
         ALL_LOCATIONS.map(async (entry) => ({
           slug: entry.slug,
           name: entry.name,
-          aqi: await fetchAqiSmart(entry.location, entry.slug, options),
+          aqi: await fetchAqiSmart(entry.location, entry.slug, options, scale),
         })),
       ),
-    [],
+    // Scale in the deps: without it the directory kept US AQI numbers after a
+    // switch to ISPU, and the Sekitar fallback list then mixed scales.
+    [scale],
     enabled,
   );
 }
 
 /** Full reading (AQI + weather + pollutants) for any coordinate pair. */
 export function useLocationAir(location: Coordinates | null, slug?: string) {
+  const { settings } = useAppState();
+  const scale = settings.indexScale;
   return useAsync<CurrentReading>(async (options) => {
     if (!location) throw new Error('Lokasi tidak dikenal');
-    return fetchAirSmart(location, slug, options);
-  }, [location?.latitude, location?.longitude, slug]);
+    return fetchAirSmart(location, slug, options, scale);
+  }, [location?.latitude, location?.longitude, slug, scale]);
 }
 
 /**
@@ -206,10 +231,12 @@ export function useIndonesiaRanking({ enabled = true }: { enabled?: boolean } = 
  * without deltas instead of replacing it with an error.
  */
 export function useCityTrends(points: TrendPoint[], enabled = true) {
+  const { settings } = useAppState();
+  const scale = settings.indexScale;
   const key = points.map((point) => point.slug).join(',');
   return useAsync<Record<string, AqiTrend>>(
-    () => (key ? fetchCityTrends(points) : Promise.resolve({})),
-    [key],
+    () => (key ? fetchCityTrends(points, { scale }) : Promise.resolve({})),
+    [key, scale],
     enabled,
   );
 }

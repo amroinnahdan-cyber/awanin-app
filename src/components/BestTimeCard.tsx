@@ -5,13 +5,14 @@ import { Dumbbell } from 'lucide-react-native';
 import type { HourlyForecastPoint } from '@/api/openMeteo';
 import { Text } from '@/components/Text';
 import { Card, SectionTitle, Skeleton } from '@/components/ui';
-import { categoryFor, readableOn } from '@/lib/aqi';
+import { categoryFor, indexSpoken, readableOn } from '@/lib/aqi';
 import {
   bestExerciseWindow,
   exerciseAdvice,
   isFlatDay,
   remainingHoursToday,
 } from '@/lib/bestTime';
+import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, type as typo, type ThemeColors } from '@/theme/tokens';
 
@@ -40,6 +41,7 @@ function clock(hour: number): string {
 export function BestTimeCard({ hourly, observedAt, loading }: BestTimeCardProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const scale = useAppState().settings.indexScale;
 
   const hours = useMemo(
     () => remainingHoursToday(hourly, observedAt),
@@ -75,7 +77,7 @@ export function BestTimeCard({ hourly, observedAt, loading }: BestTimeCardProps)
   const shownAqi = flat
     ? Math.round(hours.reduce((total, point) => total + point.aqi, 0) / hours.length)
     : best.avgAqi;
-  const tone = categoryFor(shownAqi);
+  const tone = categoryFor(shownAqi, scale);
   const advice = exerciseAdvice(shownAqi);
   const inWindow = (hour: number) =>
     flat
@@ -87,7 +89,7 @@ export function BestTimeCard({ hourly, observedAt, loading }: BestTimeCardProps)
       <SectionTitle title="Waktu terbaik olahraga" />
       <View
         accessible
-        accessibilityLabel={`Waktu terbaik olahraga ${windowLabel}, AQI ${shownAqi}, ${tone.label}. ${advice}`}
+        accessibilityLabel={`Waktu terbaik olahraga ${windowLabel}, ${indexSpoken(scale)} ${shownAqi}, ${tone.label}. ${advice}`}
       >
         <Card style={styles.card}>
           <View style={styles.head}>
@@ -100,7 +102,7 @@ export function BestTimeCard({ hourly, observedAt, loading }: BestTimeCardProps)
               </Text>
               <Text style={styles.range}>{windowLabel}</Text>
               <Text style={styles.detail}>
-                AQI {shownAqi} · {tone.label}
+                {indexSpoken(scale)} {shownAqi} · {tone.label}
               </Text>
             </View>
             <View style={[styles.badge, { backgroundColor: tone.color }]}>
@@ -121,7 +123,7 @@ export function BestTimeCard({ hourly, observedAt, loading }: BestTimeCardProps)
                       // Only the recommended window carries a category colour;
                       // tinting every hour made the whole strip look highlighted.
                       backgroundColor: inWindow(point.hour)
-                        ? categoryFor(point.aqi).color
+                        ? categoryFor(point.aqi, scale).color
                         : colors.track,
                     },
                   ]}
@@ -137,10 +139,12 @@ export function BestTimeCard({ hourly, observedAt, loading }: BestTimeCardProps)
 
           <Text style={styles.advice}>
             {flat
-              ? 'AQI hampir sama sepanjang sisa hari ini — pilih jam yang paling nyaman.'
+              ? `${indexSpoken(scale)} hampir sama sepanjang sisa hari ini — pilih jam yang paling nyaman.`
               : advice}
           </Text>
-          <Text style={styles.note}>Prakiraan AQI per jam, model CAMS (Open-Meteo).</Text>
+          <Text style={styles.note}>
+            Prakiraan {indexSpoken(scale)} per jam, model CAMS (Open-Meteo).
+          </Text>
         </Card>
       </View>
     </View>

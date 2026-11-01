@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { locationSlug } from '@/api/openMeteo';
-import { categoryFor, formatWib, shortDate } from '@/lib/aqi';
+import { categoryFor, formatWib, indexUnit, shortDate, type IndexScale } from '@/lib/aqi';
 import { loadPersisted, savePersisted } from '@/lib/persist';
 
 export type AwaninNotification = {
@@ -85,6 +85,14 @@ export type ReadingObservation = {
   observedAt: string;
   place?: string;
   slug?: string;
+  /**
+   * The number the user was actually looking at when this was recorded, and
+   * the scale it belongs to (US AQI or ISPU). The notification text keeps that
+   * unit forever — a feed item recorded under ISPU does not silently change
+   * meaning when the user later switches scales.
+   */
+  index?: number;
+  scale?: IndexScale;
 };
 
 export type NotificationGates = {
@@ -119,10 +127,15 @@ function tipFor(aqi: number): string {
 export function recordReading(reading: ReadingObservation, gates: NotificationGates) {
   const place = reading.place ?? 'Jakarta Pusat';
   const slug = reading.slug ?? locationSlug(place);
-  const category = categoryFor(reading.aqi);
+  const unit = indexUnit(reading.scale ?? 'us');
+  // Only trust the passed index on the scale it claims to be on; otherwise fall
+  // back to the API's own US AQI so a legacy caller stays correctly labelled.
+  const onScale: IndexScale = reading.scale ?? 'us';
+  const value = onScale === 'ispu' && reading.index != null ? reading.index : reading.aqi;
+  const category = categoryFor(value, onScale);
   const previous = lastCategoryByPlace.get(place);
   lastCategoryByPlace.set(place, category.label);
-  const tip = gates.tipsEnabled ? ` ${tipFor(reading.aqi)}` : '';
+  const tip = gates.tipsEnabled ? ` ${tipFor(value)}` : '';
 
   if (gates.dailySummaryEnabled) {
     const day = reading.observedAt.slice(0, 10);
@@ -130,11 +143,11 @@ export function recordReading(reading: ReadingObservation, gates: NotificationGa
       lastSummaryDay = day;
       pushNotification({
         title: `Ringkasan ${shortDate(day)} · ${place}`,
-        body: `AQI terbaca ${reading.aqi} (${category.label}). ${category.message}${tip}`,
+        body: `${unit} terbaca ${value} (${category.label}). ${category.message}${tip}`,
         time: formatWib(reading.observedAt),
         place,
         slug,
-        tone: reading.aqi > 100 ? 'warning' : 'info',
+        tone: value > 100 ? 'warning' : 'info',
       });
     }
   }
@@ -151,11 +164,11 @@ export function recordReading(reading: ReadingObservation, gates: NotificationGa
 
   pushNotification({
     title: `${place}: kualitas udara kini ${category.label.toLowerCase()}`,
-    body: `${category.message} AQI tercatat ${reading.aqi}.${tip}`,
+    body: `${category.message} ${unit} tercatat ${value}.${tip}`,
     time: formatWib(reading.observedAt),
     place,
     slug,
-    tone: reading.aqi > 100 ? 'warning' : 'info',
+    tone: value > 100 ? 'warning' : 'info',
   });
 }
 

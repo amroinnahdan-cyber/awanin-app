@@ -12,6 +12,8 @@ import {
   fetchAirFromBackend,
   fetchHistoryFromBackend,
 } from '@/api/backend';
+import type { IndexScale } from '@/lib/aqi';
+import { ispuForConcentration } from '@/lib/aqi';
 import { loadReadingCache, saveReadingCache } from '@/lib/offline';
 
 /**
@@ -51,15 +53,22 @@ function cacheKeyFor(slug: string | undefined, location: Coordinates): string {
  */
 export type FetchOptions = { force?: boolean };
 
+/**
+ * `scale` selects which index every number is computed in. The backend only
+ * stores US AQI series, so ISPU requests bypass it and go straight to
+ * Open-Meteo, which supplies the PM2.5 concentrations needed for the
+ * Permen LHK 14/2020 conversion.
+ */
 export async function fetchAirSmart(
   location: Coordinates,
   slug?: string,
   options: FetchOptions = {},
+  scale: IndexScale = 'us',
 ): Promise<CurrentReading> {
   const cacheKey = cacheKeyFor(slug, location);
   const force = options.force === true;
 
-  if (backendConfigured() && !force) {
+  if (scale === 'us' && backendConfigured() && !force) {
     try {
       const { reading, hourly, forecast } = await fetchAirFromBackend(
         location.latitude,
@@ -76,7 +85,7 @@ export async function fetchAirSmart(
   try {
     const [reading, bundle] = await Promise.all([
       fetchCurrentReading(location, force),
-      fetchForecastBundle(location, force),
+      fetchForecastBundle(location, force, scale),
     ]);
     const merged: CurrentReading = {
       ...reading,
@@ -105,17 +114,22 @@ export async function fetchAqiSmart(
   location: Coordinates,
   slug?: string,
   options: FetchOptions = {},
+  scale: IndexScale = 'us',
 ): Promise<number> {
   const force = options.force === true;
   if (backendConfigured() && !force) {
     try {
       const { reading } = await fetchAirFromBackend(location.latitude, location.longitude);
-      return reading.aqi;
+      if (scale === 'us') return reading.aqi;
+      // The backend keeps PM2.5 next to the AQI, so an ISPU estimate needs no
+      // extra request. A missing value falls through to a direct read.
+      const ispu = ispuForConcentration('pm2_5', reading.pm25);
+      if (ispu !== null) return ispu;
     } catch {
       // fall through
     }
   }
-  return fetchAqiAt(location, force);
+  return fetchAqiAt(location, force, scale);
 }
 
 export async function fetchHistorySmart(
@@ -123,15 +137,22 @@ export async function fetchHistorySmart(
   location: Coordinates,
   slug?: string,
   options: FetchOptions = {},
+  scale: IndexScale = 'us',
 ): Promise<DayAqi[]> {
-  if (!options.force && backendConfigured() && slug && KNOWN_SLUGS.has(slug)) {
+  if (
+    scale === 'us' &&
+    !options.force &&
+    backendConfigured() &&
+    slug &&
+    KNOWN_SLUGS.has(slug)
+  ) {
     try {
       return await fetchHistoryFromBackend(slug, pastDays);
     } catch {
       // fall through
     }
   }
-  return fetchDailyAqi(pastDays, location, options.force === true);
+  return fetchDailyAqi(pastDays, location, options.force === true, scale);
 }
 
 /** Exposed for the location sheet / onboarding copy. */

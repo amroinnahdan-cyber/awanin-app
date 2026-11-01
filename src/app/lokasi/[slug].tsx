@@ -24,7 +24,13 @@ import { useTopInset } from '@/hooks/useTopInset';
 import { formatTemperature } from '@/lib/format';
 import { openUrl } from '@/lib/share';
 import { useBackOrHome } from '@/lib/navigation';
-import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
+import {
+  categoryFor,
+  displayIndexFor,
+  gaugeProgress,
+  indexSpoken,
+  readableOn,
+} from '@/lib/aqi';
 import { placeImage } from '@/lib/placeImages';
 import {
   findLocation,
@@ -58,15 +64,15 @@ export default function DetailLokasiScreen() {
   const trend = trends?.[slug];
 
   const reading = air.data;
-  const aqi = reading?.aqi ?? 0;
-  const category = categoryFor(aqi);
+  const aqi = reading ? (displayIndexFor(reading, settings.indexScale) ?? 0) : 0;
+  const category = categoryFor(aqi, settings.indexScale);
   const name = entry?.name ?? 'Lokasi';
   const isFavorite = favorites.includes(slug);
   const hero = placeImage(slug);
 
   const shareReading = () => {
     const message = reading
-      ? `${name}: AQI ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
+      ? `${name}: ${indexSpoken(settings.indexScale)} ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
       : `${name} — pantau kualitas udara lewat Awanin.`;
     void share(message);
   };
@@ -151,7 +157,7 @@ export default function DetailLokasiScreen() {
               <Text style={styles.title}>{name}</Text>
               <View style={styles.areaRow}>
                 <MapPin size={13} color={colors.mutedText} strokeWidth={2} />
-                <Text style={styles.area}>{entry?.area ?? 'Jakarta'}</Text>
+                <Text style={styles.area}>{entry?.area ?? 'Lokasi'}</Text>
               </View>
             </View>
           </View>
@@ -167,8 +173,9 @@ export default function DetailLokasiScreen() {
               <Card style={styles.stats}>
                 <View style={styles.ringWrap}>
                   <AqiRing
+                    unit={indexSpoken(settings.indexScale)}
                     value={reading ? aqi : '—'}
-                    progress={gaugeProgress(aqi)}
+                    progress={gaugeProgress(aqi, settings.indexScale)}
                     categoryColor={reading ? category.color : colors.track}
                     badge={{
                       label: reading ? category.short : 'Memuat',

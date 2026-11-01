@@ -9,11 +9,13 @@ import { font, type as typo, type ThemeColors } from '@/theme/tokens';
 type AqiRingProps = {
   /** Numeric reading, or '—' while loading */
   value: number | string;
-  /** 0..1 fill over the AQI scale */
+  /** 0..1 fill over the index scale */
   progress: number;
   categoryColor: string;
   /** Category pill under the number, inside the ring (as in the showcase) */
   badge?: { label: string; tone: string; textTone: string };
+  /** Unit label above the number: "AQI" (US AQI) or "ISPU" */
+  unit?: string;
   size?: number;
 };
 
@@ -37,7 +39,14 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number): s
  * Ring: 174px outer diameter, 14px stroke. Centre column reads
  * "AQI" label → big number → category pill, matching the showcase layout.
  */
-export function AqiRing({ value, progress, categoryColor, badge, size = 174 }: AqiRingProps) {
+export function AqiRing({
+  value,
+  progress,
+  categoryColor,
+  badge,
+  unit = 'AQI',
+  size = 174,
+}: AqiRingProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const thickness = 14;
@@ -77,7 +86,7 @@ export function AqiRing({ value, progress, categoryColor, badge, size = 174 }: A
         ) : null}
       </Svg>
       <View style={styles.center}>
-        <Text style={styles.unit}>AQI</Text>
+        <Text style={styles.unit}>{unit}</Text>
         <Text style={styles.value}>{shown}</Text>
         {badge ? (
           <View style={[styles.badge, { backgroundColor: badge.tone }]}>

@@ -16,7 +16,14 @@ import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { CloudOff } from 'lucide-react-native';
 
 import { Text } from '@/components/Text';
-import { AQI_CATEGORIES, AQI_SCALE_MAX, categoryFor } from '@/lib/aqi';
+import {
+  AQI_CATEGORIES,
+  AQI_SCALE_MAX,
+  categoryFor,
+  indexUnit,
+  ISPU_CATEGORIES,
+  type IndexScale,
+} from '@/lib/aqi';
 import { relativeTime } from '@/lib/format';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, shadow, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
@@ -73,11 +80,20 @@ export function Skeleton({
 }
 
 /**
- * The full 0-500 AQI scale as a strip, with a marker at the current reading.
+ * The full 0-500 scale as a strip, with a marker at the current reading.
  * The ring shows where today sits on its own arc; this shows what the rest of
- * the scale looks like, which is the part a single number hides.
+ * the scale looks like, which is the part a single number hides. The category
+ * bands follow the chosen index (US AQI or ISPU).
  */
-export function AqiLegend({ value, style }: { value?: number; style?: StyleProp<ViewStyle> }) {
+export function AqiLegend({
+  value,
+  scale = 'us',
+  style,
+}: {
+  value?: number;
+  scale?: IndexScale;
+  style?: StyleProp<ViewStyle>;
+}) {
   const styles = useThemedStyles(createStyles);
   const ratio =
     value === undefined ? null : Math.min(Math.max(value, 0), AQI_SCALE_MAX) / AQI_SCALE_MAX;
@@ -88,22 +104,23 @@ export function AqiLegend({ value, style }: { value?: number; style?: StyleProp<
     { at: 200 / AQI_SCALE_MAX, label: '200' },
     { at: 1, label: '500' },
   ];
+  const categories = scale === 'ispu' ? ISPU_CATEGORIES : AQI_CATEGORIES;
 
   return (
     <View style={[styles.scale, style]}>
       <View style={styles.scaleHead}>
-        <Text style={styles.scaleTitle}>Skala AQI</Text>
+        <Text style={styles.scaleTitle}>{`Skala ${indexUnit(scale)}`}</Text>
         <Text style={styles.scaleValue}>
-          {value === undefined ? 'Menunggu data' : `${value} · ${categoryFor(value).short}`}
+          {value === undefined ? 'Menunggu data' : `${value} · ${categoryFor(value, scale).short}`}
         </Text>
       </View>
 
       <View style={styles.scaleBar}>
-        {AQI_CATEGORIES.map((category, index) => (
+        {categories.map((category, index) => (
           <View
             key={category.label}
             style={{
-              flex: index === AQI_CATEGORIES.length - 1 ? 2 : 1,
+              flex: index === categories.length - 1 ? 2 : 1,
               backgroundColor: category.color,
             }}
           />
@@ -176,17 +193,22 @@ export function SectionTitle({ title, action, onAction }: SectionTitleProps) {
   );
 }
 
-/** Active pill: accent on `onAccent` text. Inactive: transparent with muted label. */
+/**
+ * Active pill: accent on `onAccent` text. Inactive: transparent with muted
+ * label. An optional `dot` swatch (e.g. a category colour) leads the label.
+ */
 export function Chip({
   label,
   active,
   onPress,
   style,
+  dot,
 }: {
   label: string;
   active: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  dot?: string;
 }) {
   const styles = useThemedStyles(createStyles);
   return (
@@ -196,6 +218,7 @@ export function Chip({
       onPress={onPress}
       style={[styles.chip, active ? styles.chipActive : styles.chipIdle, style]}
     >
+      {dot ? <View style={[styles.chipDot, { backgroundColor: dot }]} /> : null}
       <Text
         numberOfLines={1}
         style={[styles.chipLabel, active ? styles.chipLabelActive : styles.chipLabelIdle]}
@@ -335,9 +358,16 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       height: 34,
       borderRadius: radius.pill,
+      flexDirection: 'row' as const,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
+      gap: 6,
       paddingHorizontal: 8,
+    },
+    chipDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
     },
     chipActive: {
       backgroundColor: colors.accent,

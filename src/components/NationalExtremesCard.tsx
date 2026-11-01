@@ -6,10 +6,10 @@ import { Text } from '@/components/Text';
 import { TrendDelta } from '@/components/TrendDelta';
 import { Card, InlineError, SectionTitle, Skeleton } from '@/components/ui';
 import { useCityTrends } from '@/hooks/useAirQuality';
-import { categoryFor, readableOn } from '@/lib/aqi';
+import { categoryFor, indexSpoken, readableOn } from '@/lib/aqi';
 import { relativeTime } from '@/lib/format';
 import { describeTrend, pickExtremes, type IndonesiaRow } from '@/lib/indonesia';
-import { selectLocation } from '@/state/app';
+import { selectLocation, useAppState } from '@/state/app';
 import { font, radius, type as typo, type ThemeColors } from '@/theme/tokens';
 import { useThemedStyles } from '@/theme/ThemeProvider';
 
@@ -49,6 +49,7 @@ export function NationalExtremesCard({
   onRetry,
 }: Props) {
   const styles = useThemedStyles(createStyles);
+  const scale = useAppState().settings.indexScale;
   const { best, worst } = useMemo(() => pickExtremes(rows, 3), [rows]);
   const featured = useMemo(() => [...best, ...worst], [best, worst]);
   const rankBySlug = useMemo(
@@ -78,7 +79,7 @@ export function NationalExtremesCard({
         <Text style={styles.groupLabel}>{label}</Text>
       </View>
       {entries.map(({ city, aqi }) => {
-        const tone = categoryFor(aqi);
+        const tone = categoryFor(aqi, scale);
         const isSelected = selectedSlug === city.slug;
         const rank = rankBySlug.get(city.slug);
         const trend = trends?.[city.slug];
@@ -87,7 +88,7 @@ export function NationalExtremesCard({
           <Pressable
             key={city.slug}
             accessibilityRole="button"
-            accessibilityLabel={`${city.name}, ${city.province}, AQI ${aqi}${trendLabel}. Buka detail`}
+            accessibilityLabel={`${city.name}, ${city.province}, ${indexSpoken(scale)} ${aqi}${trendLabel}. Buka detail`}
             accessibilityState={{ selected: isSelected }}
             onPress={() => {
               selectLocation(city.slug);

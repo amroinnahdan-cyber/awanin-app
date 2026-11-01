@@ -2,9 +2,10 @@ import { View } from 'react-native';
 
 import { Text } from '@/components/Text';
 import { Card, SectionTitle, Skeleton } from '@/components/ui';
-import { dayLabel, shortDate } from '@/lib/aqi';
+import { categoryFor, dayLabel, indexSpoken, shortDate } from '@/lib/aqi';
 import type { DayAqi } from '@/api/openMeteo';
-import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
+import { useAppState } from '@/state/app';
+import { useThemedStyles } from '@/theme/ThemeProvider';
 import { font, type as typo, type ThemeColors } from '@/theme/tokens';
 
 const SCALE_MAX = 200;
@@ -24,7 +25,7 @@ export function ForecastStrip({
   title?: string;
 }) {
   const styles = useThemedStyles(createStyles);
-  const { colors } = useTheme();
+  const scale = useAppState().settings.indexScale;
 
   // Open-Meteo only publishes AQI forecasts for five days, so the heading
   // follows the data instead of promising seven bars and drawing two empty ones.
@@ -54,24 +55,17 @@ export function ForecastStrip({
                 <View
                   key={day.day}
                   style={styles.item}
-                  accessibilityLabel={`${shortDate(day.day)}, AQI ${day.avg}`}
+                  accessibilityLabel={`${shortDate(day.day)}, ${indexSpoken(scale)} ${day.avg}`}
                 >
                   <Text style={[styles.day, index === 0 && styles.today]}>
                     {index === 0 ? 'Hari ini' : dayLabel(day.day)}
                   </Text>
                   <View style={styles.barTrack}>
+                    {/* Same category colours as the ring, in the chosen scale. */}
                     <View
                       style={[
                         styles.bar,
-                        {
-                          height,
-                          backgroundColor:
-                            day.avg <= 50
-                              ? colors.good
-                              : day.avg <= 100
-                                ? colors.caution
-                                : '#f0863c',
-                        },
+                        { height, backgroundColor: categoryFor(day.avg, scale).color },
                       ]}
                     />
                   </View>

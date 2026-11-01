@@ -17,7 +17,13 @@ import { Card, HeroGlow, InlineError, Skeleton, StaleBadge } from '@/components/
 import { useIndonesiaRanking, useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
 import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor, gaugeProgress, readableOn } from '@/lib/aqi';
+import {
+  categoryFor,
+  displayIndexFor,
+  gaugeProgress,
+  indexUnit,
+  readableOn,
+} from '@/lib/aqi';
 import { buildRows } from '@/lib/indonesia';
 import { useAppState } from '@/state/app';
 import { useNotifications } from '@/state/notifications';
@@ -43,7 +49,8 @@ export default function BerandaScreen() {
   const air = useSelectedAir();
   const national = useIndonesiaRanking();
   const history = useSelectedHistory(2);
-  const { selected } = useAppState();
+  const { selected, settings } = useAppState();
+  const scale = settings.indexScale;
   const notifications = useNotifications();
   const { state: shareState, share } = useShare();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -52,14 +59,15 @@ export default function BerandaScreen() {
   // Same ten-minute Open-Meteo batch the Indonesia screen uses, so the card and
   // the full ranking can never disagree.
   const nationalRows = useMemo(
-    () => buildRows(national.data?.readings ?? [], INDONESIA_CITIES),
-    [national.data],
+    () => buildRows(national.data?.readings ?? [], INDONESIA_CITIES, scale),
+    [national.data, scale],
   );
 
   const reading = air.data;
-  const aqi = reading?.aqi ?? 0;
-  const category = categoryFor(aqi);
-  const flavor = aqi <= 100 ? 'cukup baik' : 'kurang baik';
+  const aqi = displayIndexFor(reading, scale);
+  const category = aqi === null ? null : categoryFor(aqi, scale);
+  const aqiValue = aqi ?? 0;
+  const flavor = aqiValue <= 100 ? 'cukup baik' : 'kurang baik';
 
   const pm25 = reading?.pollutants.find((entry) => entry.key === 'pm2_5');
   const pm10 = reading?.pollutants.find((entry) => entry.key === 'pm10');
@@ -74,9 +82,10 @@ export default function BerandaScreen() {
       : 'akan tersedia setelah cukup data terkumpul.';
 
   const shareReading = () => {
-    const message = reading
-      ? `AQI ${selected.name} sekarang ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
-      : `Awanin — pantau kualitas udara Jakarta setiap saat.`;
+    const message =
+      reading && aqi !== null && category
+        ? `${indexUnit(scale)} ${selected.name} sekarang ${aqi} (${category.label}). ${category.message} — dipantau lewat Awanin.`
+        : `Awanin — pantau kualitas udara di 100 kota Indonesia.`;
     void share(message);
   };
 
@@ -172,13 +181,14 @@ export default function BerandaScreen() {
         <HeroGlow />
 
         <AqiRing
-          value={reading ? aqi : '—'}
-          progress={gaugeProgress(aqi)}
-          categoryColor={reading ? category.color : colors.track}
+          unit={indexUnit(scale)}
+          value={reading ? (aqi ?? '—') : '—'}
+          progress={gaugeProgress(aqi ?? 0, scale)}
+          categoryColor={category ? category.color : colors.track}
           badge={{
-            label: reading ? category.short : 'Memuat',
-            tone: reading ? category.color : colors.track,
-            textTone: readableOn(reading ? category.color : colors.track),
+            label: category ? category.short : 'Memuat',
+            tone: category ? category.color : colors.track,
+            textTone: readableOn(category ? category.color : colors.track),
           }}
         />
 

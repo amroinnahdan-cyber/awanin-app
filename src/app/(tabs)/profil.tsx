@@ -7,32 +7,34 @@ import {
   Bell,
   ChevronRight,
   Info,
-  LogOut,
   MapPin,
+  RotateCcw,
   Send,
   SlidersHorizontal,
   Wifi,
+  Wind,
 } from 'lucide-react-native';
 
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { LocationSheet } from '@/components/LocationSheet';
 import { Sheet, SheetRow, Segmented } from '@/components/Sheet';
 import { Card, Divider } from '@/components/ui';
+import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
+import { indexUnit } from '@/lib/aqi';
 import { removeSubscription } from '@/lib/subscription';
 import {
   ALL_LOCATIONS,
   resetAppState,
   updateSettings,
   useAppState,
-  USER_PROFILE,
 } from '@/state/app';
 import { usePushState } from '@/state/push';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
-type SheetName = 'preferensi' | 'keluar' | null;
+type SheetName = 'preferensi' | 'reset' | null;
 
 type SettingRow = {
   key: string;
@@ -67,7 +69,7 @@ export default function ProfilScreen() {
 
   const shareApp = () => {
     void share(
-      'Awanin — Know Your Air. Pantau kualitas udara Jakarta lewat aplikasi ini: ' +
+      'Awanin — Know Your Air. Pantau kualitas udara di 100 kota Indonesia lewat aplikasi ini: ' +
         'AQI real-time, prakiraan, lokasi di sekitarmu, riwayat, dan tips kesehatan.',
     );
   };
@@ -127,10 +129,10 @@ export default function ProfilScreen() {
       onPress: shareApp,
     },
     {
-      key: 'keluar',
-      label: 'Keluar',
-      icon: LogOut,
-      onPress: () => setSheet('keluar'),
+      key: 'reset',
+      label: 'Atur ulang',
+      icon: RotateCcw,
+      onPress: () => setSheet('reset'),
     },
   ];
 
@@ -145,13 +147,20 @@ export default function ProfilScreen() {
       </View>
 
       <View style={styles.sections}>
+        {/*
+          No account system, so this card introduces the app rather than a person:
+          a demo name and e-mail used to sit here, which read as "someone else's
+          account" on every device and shipped a real address with the APK.
+        */}
         <Card tone="tint" style={styles.identity}>
           <LinearGradient colors={[colors.sky, colors.tint]} style={styles.avatar}>
-            <Text style={styles.initials}>{USER_PROFILE.initials}</Text>
+            <Wind size={24} color={colors.accent} strokeWidth={1.8} />
           </LinearGradient>
           <View style={styles.identityText}>
-            <Text style={styles.name}>{USER_PROFILE.name}</Text>
-            <Text style={styles.handle}>{USER_PROFILE.email}</Text>
+            <Text style={styles.name}>Awanin</Text>
+            <Text style={styles.handle}>
+              Know Your Air · {INDONESIA_CITIES.length} kota Indonesia
+            </Text>
           </View>
         </Card>
 
@@ -190,7 +199,7 @@ export default function ProfilScreen() {
       <Sheet
         visible={sheet === 'preferensi'}
         title="Preferensi"
-        subtitle={`Lokasi favorit: ${favorites.length} · Skala US AQI`}
+        subtitle={`Lokasi favorit: ${favorites.length} · ${indexUnit(settings.indexScale)}`}
         onClose={() => setSheet(null)}
       >
         <SheetRow label="Tema" hint="Mengikuti pengaturan perangkat secara default" />
@@ -218,6 +227,22 @@ export default function ProfilScreen() {
           />
         </View>
         <Divider />
+        {/**
+         * Skala indeks: bukan cuma ganti label — angka riwayat, prakiraan, dan
+         * feed notifikasi ikut dihitung ulang sesuai skala yang dipilih.
+         */}
+        <SheetRow label="Skala indeks" hint="US AQI dari Open-Meteo atau ISPU (Permen LHK 14/2020)" />
+        <View style={styles.segment}>
+          <Segmented
+            options={[
+              { label: 'US AQI', value: 'us' },
+              { label: 'ISPU', value: 'ispu' },
+            ]}
+            value={settings.indexScale}
+            onChange={(next) => updateSettings({ indexScale: next })}
+          />
+        </View>
+        <Divider />
         {ALL_LOCATIONS.map((entry) => (
           <SheetRow
             key={entry.slug}
@@ -229,15 +254,21 @@ export default function ProfilScreen() {
         ))}
       </Sheet>
 
+      {/*
+        "Keluar" tidak lagi masuk akal: aplikasi ini tidak punya akun untuk
+        ditinggalkan. Ini reset perangkat, jadi judulnya menyebut itu dan isi
+        sheet menyebut apa saja yang ikut hilang — termasuk onboarding yang
+        mulai ulang, yang mengejutkan kalau tidak diumumkan.
+      */}
       <Sheet
-        visible={sheet === 'keluar'}
-        title="Keluar dari Awanin?"
-        subtitle="Pengaturan, favorit, dan langganan notifikasi akan dihapus dari perangkat."
+        visible={sheet === 'reset'}
+        title="Atur ulang Awanin?"
+        subtitle="Favorit, pengaturan, dan langganan notifikasi akan dihapus dari perangkat, dan aplikasi kembali ke layar pembuka."
         onClose={() => setSheet(null)}
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Ya, keluar"
+          accessibilityLabel="Ya, atur ulang"
           onPress={() => {
             void removeSubscription();
             resetAppState();
@@ -245,8 +276,8 @@ export default function ProfilScreen() {
           }}
           style={({ pressed }) => [styles.logoutConfirm, pressed && styles.rowPressed]}
         >
-          <LogOut size={18} color={colors.onAccent} strokeWidth={2} />
-          <Text style={styles.logoutConfirmLabel}>Ya, keluar</Text>
+          <RotateCcw size={18} color={colors.onAccent} strokeWidth={2} />
+          <Text style={styles.logoutConfirmLabel}>Ya, atur ulang</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -296,10 +327,6 @@ function createStyles(colors: ThemeColors) {
       borderRadius: radius.pill,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
-    },
-    initials: {
-      ...typo.heading,
-      color: colors.accent,
     },
     identityText: {
       gap: 2,

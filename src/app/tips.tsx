@@ -6,8 +6,9 @@ import { DeviceStatusBar } from '@/components/DeviceStatusBar';
 import { Card } from '@/components/ui';
 import { useSelectedAir } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor } from '@/lib/aqi';
+import { categoryFor, displayIndexFor, indexSpoken, readableOn } from '@/lib/aqi';
 import { useBackOrHome } from '@/lib/navigation';
+import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 
@@ -61,7 +62,10 @@ export default function TipsScreen() {
   const goBack = useBackOrHome();
   const air = useSelectedAir();
   const reading = air.data;
-  const category = reading ? categoryFor(reading.aqi) : null;
+  const { settings } = useAppState();
+  const scale = settings.indexScale;
+  const shownAqi = reading ? (displayIndexFor(reading, scale) ?? 0) : 0;
+  const category = reading ? categoryFor(shownAqi, scale) : null;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -101,13 +105,13 @@ export default function TipsScreen() {
         {reading && category ? (
           <Card tone="tint" style={styles.advice}>
             <View style={[styles.adviceBadge, { backgroundColor: category.color }]}>
-              <Text style={[styles.adviceBadgeLabel, { color: '#ffffff' }]}>
-                AQI {reading.aqi}
+              <Text style={[styles.adviceBadgeLabel, { color: readableOn(category.color) }]}>
+                {`${indexSpoken(scale)} ${shownAqi}`}
               </Text>
             </View>
             <View style={styles.adviceText}>
               <Text style={styles.adviceTitle}>{category.label}</Text>
-              <Text style={styles.adviceBody}>{adviceFor(reading.aqi)}</Text>
+              <Text style={styles.adviceBody}>{adviceFor(shownAqi)}</Text>
             </View>
           </Card>
         ) : null}

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { JAKARTA_PUSAT, POPULAR_LOCATIONS, type Coordinates } from '@/api/openMeteo';
+import type { IndexScale } from '@/lib/aqi';
 import { INDONESIA_CITIES, type IndonesiaCity } from '@/data/indonesiaCities';
 import { distanceKm, timezoneForCoordinates } from '@/lib/geo';
 import { loadPersisted, savePersisted } from '@/lib/persist';
@@ -14,22 +15,6 @@ import { loadPersisted, savePersisted } from '@/lib/persist';
  * and without prop drilling. The state is persisted with AsyncStorage
  * (`lib/persist.ts`) and hydrated at startup, so choices survive a restart.
  */
-
-/**
- * Placeholder profile shown on the Profil screen — the demo persona from the
- * design showcase. There is no account system; change these two lines to rebrand.
- */
-export type UserProfile = {
-  name: string;
-  email: string;
-  initials: string;
-};
-
-export const USER_PROFILE: UserProfile = {
-  name: 'Dzul Amroin',
-  email: 'dzulamroin@gmail.com',
-  initials: 'DA',
-};
 
 export type AppLocation = {
   slug: string;
@@ -69,6 +54,8 @@ export type AppSettings = {
   /** "Update Cuaca" — once-a-day digest of reading + weather */
   weatherUpdate: boolean;
   temperatureUnit: TemperatureUnit;
+  /** Which index the app displays: US AQI or Indonesian ISPU */
+  indexScale: IndexScale;
   /** Light / dark / follow the OS */
   themeMode: ThemeMode;
   /** First-run onboarding finished */
@@ -96,6 +83,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   tipsHealth: true,
   weatherUpdate: false,
   temperatureUnit: 'C',
+  indexScale: 'us',
   themeMode: 'system',
   onboarded: false,
 };
@@ -291,7 +279,7 @@ export function updateSettings(patch: Partial<AppSettings>) {
   emit();
 }
 
-/** Used by the profile's "Keluar" confirmation: back to a first-run state. */
+/** Used by the profile's "Atur ulang" confirmation: back to a first-run state. */
 export function resetAppState() {
   state = defaultState();
   emit();

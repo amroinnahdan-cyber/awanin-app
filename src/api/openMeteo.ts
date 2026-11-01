@@ -11,6 +11,7 @@
  * "Air quality and weather data by Open-Meteo".
  */
 
+import { ispuForConcentration, type IndexScale } from '@/lib/aqi';
 export type Coordinates = {
   latitude: number;
   longitude: number;
@@ -258,24 +259,35 @@ export function findPopularLocation(slug: string) {
 }
 
 /** Light-weight single-location AQI read (no weather call). */
-export async function fetchAqiAt(location: Coordinates, force = false): Promise<number> {
+export async function fetchAqiAt(
+  location: Coordinates,
+  force = false,
+  scale: IndexScale = 'us',
+): Promise<number> {
   return withCache(
-    `aqi:${location.latitude},${location.longitude}`,
+    `aqi:${location.latitude},${location.longitude}:${scale}`,
     5 * 60_000,
-    () => loadAqiAt(location),
+    () => loadAqiAt(location, scale),
     force,
   );
 }
 
-async function loadAqiAt(location: Coordinates): Promise<number> {
+async function loadAqiAt(location: Coordinates, scale: IndexScale): Promise<number> {
   const query = new URLSearchParams({
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     timezone: location.timezone,
-    current: 'us_aqi',
+    // pm2_5 comes along only to power the ISPU estimate; the API answers both
+    // fields in one response of exactly the same size class.
+    current: scale === 'ispu' ? 'us_aqi,pm2_5' : 'us_aqi',
   });
   const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
-  return numberOr(response.current?.us_aqi);
+  const aqi = numberOr(response.current?.us_aqi);
+  if (scale !== 'ispu') return aqi;
+  const ispu = ispuForConcentration('pm2_5', numberOr(response.current?.pm2_5, Number.NaN));
+  // A missing PM2.5 field must not read as ISPU 0: keep the API value instead,
+  // which the screens later label with its own unit.
+  return ispu ?? aqi;
 }
 
 
@@ -309,20 +321,31 @@ export function groupHourlyByDay(
   return days;
 }
 
+/** Map a raw (US AQI or PM2.5) series into the chosen index, skipping nulls. */
+function toIndexValues(scale: IndexScale, values: (number | null)[]): (number | null)[] {
+  if (scale !== 'ispu') return values;
+  return values.map((value) =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? ispuForConcentration('pm2_5', value)
+      : null,
+  );
+}
+
 export async function fetchDailyAqi(
   pastDays: number,
   location: Coordinates = JAKARTA_PUSAT,
   force = false,
+  scale: IndexScale = 'us',
 ): Promise<DayAqi[]> {
   return withCache(
-    `daily:${location.latitude},${location.longitude}:${pastDays}`,
+    `daily:${location.latitude},${location.longitude}:${pastDays}:${scale}`,
     15 * 60_000,
-    () => loadDailyAqi(pastDays, location),
+    () => loadDailyAqi(pastDays, location, scale),
     force,
   );
 }
 
-async function loadDailyAqi(pastDays: number, location: Coordinates): Promise<DayAqi[]> {
+async function loadDailyAqi(pastDays: number, location: Coordinates, scale: IndexScale): Promise<DayAqi[]> {
   // `past_days` excludes today and `forecast_days=1` appends it, so 7 + 1 gave
   // eight bars under a "7 Hari" tab. Shift the window one day back.
   const span = Math.max(1, Math.round(pastDays));
@@ -330,13 +353,13 @@ async function loadDailyAqi(pastDays: number, location: Coordinates): Promise<Da
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     timezone: location.timezone,
-    hourly: 'us_aqi',
+    hourly: scale === 'ispu' ? 'us_aqi,pm2_5' : 'us_aqi',
     past_days: String(span - 1),
     forecast_days: '1',
   });
   const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
   const hourly = response.hourly ?? {};
-  return groupHourlyByDay(hourly.time ?? [], hourly.us_aqi ?? []);
+  return groupHourlyByDay(hourly.time ?? [], toIndexValues(scale, hourly.pm2_5 ?? hourly.us_aqi ?? []));
 }
 
 /**
@@ -365,26 +388,27 @@ export function buildDailyForecast(
 export async function fetchForecastBundle(
   location: Coordinates = JAKARTA_PUSAT,
   force = false,
+  scale: IndexScale = 'us',
 ): Promise<ForecastBundle> {
   return withCache(
-    `forecast:${location.latitude},${location.longitude}`,
+    `forecast:${location.latitude},${location.longitude}:${scale}`,
     10 * 60_000,
-    () => loadForecastBundle(location),
+    () => loadForecastBundle(location, scale),
     force,
   );
 }
 
-async function loadForecastBundle(location: Coordinates): Promise<ForecastBundle> {
+async function loadForecastBundle(location: Coordinates, scale: IndexScale): Promise<ForecastBundle> {
   const query = new URLSearchParams({
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     timezone: location.timezone,
-    hourly: 'us_aqi',
+    hourly: scale === 'ispu' ? 'us_aqi,pm2_5' : 'us_aqi',
     forecast_days: '7',
   });
   const response = await requestJson(`${AIR_QUALITY_URL}?${query.toString()}`);
   const times = response.hourly?.time ?? [];
-  const values = response.hourly?.us_aqi ?? [];
+  const values = toIndexValues(scale, (scale === 'ispu' ? response.hourly?.pm2_5 : response.hourly?.us_aqi) ?? []);
   const hourly: HourlyForecastPoint[] = [];
   for (let i = 0; i < times.length; i += 1) {
     const time = times[i];

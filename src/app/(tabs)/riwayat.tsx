@@ -10,7 +10,14 @@ import { Sheet, SheetRow } from '@/components/Sheet';
 import { Card, Chip, InlineError, SectionTitle, Skeleton } from '@/components/ui';
 import { useSelectedAir, useSelectedHistory } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor, dayLabel, pollutantBand, readableOn } from '@/lib/aqi';
+import {
+  categoryFor,
+  dayLabel,
+  indexUnit,
+  pollutantBand,
+  readableOn,
+  type IndexScale,
+} from '@/lib/aqi';
 import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
@@ -24,7 +31,10 @@ const PLOT_HEIGHT = 140;
 const Y_MAX = 200;
 const Y_TICKS = [0, 50, 100, 150, 200];
 
-function Chart({ points }: { points: { day: string; avg: number }[] }) {
+function Chart({
+  points,
+  scale = 'us',
+}: { points: { day: string; avg: number }[]; scale?: IndexScale }) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
 
@@ -79,7 +89,7 @@ function Chart({ points }: { points: { day: string; avg: number }[] }) {
             <Path
               key={points[index].day}
               d={`M ${coord.x} ${coord.y - 3} A 3 3 0 1 1 ${coord.x - 0.01} ${coord.y - 3} Z`}
-              fill={categoryFor(points[index].avg).color}
+              fill={categoryFor(points[index].avg, scale).color}
             />
           ))}
         </Svg>
@@ -126,7 +136,8 @@ export default function RiwayatScreen() {
   const topInset = useTopInset();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
-  const { selected } = useAppState();
+  const { selected, settings } = useAppState();
+  const scale = settings.indexScale;
   const [range, setRange] = useState<number>(7);
   const [customOpen, setCustomOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -203,7 +214,7 @@ export default function RiwayatScreen() {
           <Card style={styles.historyCard}>
             <View style={styles.summary}>
               <View>
-                <Text style={styles.summaryCaption}>Rata-rata AQI</Text>
+                <Text style={styles.summaryCaption}>{`Rata-rata ${indexUnit(scale)}`}</Text>
                 {history.data ? (
                   <Text style={styles.summaryValue}>{mean}</Text>
                 ) : (
@@ -211,26 +222,27 @@ export default function RiwayatScreen() {
                 )}
               </View>
               {history.data ? (
-                <View style={[styles.summaryBadge, { backgroundColor: categoryFor(mean).color }]}>
+                <View
+                  style={[styles.summaryBadge, { backgroundColor: categoryFor(mean, scale).color }]}
+                >
                   <Text
                     style={[
                       styles.summaryBadgeLabel,
-                      { color: readableOn(categoryFor(mean).color) },
+                      { color: readableOn(categoryFor(mean, scale).color) },
                     ]}
                   >
-                    {categoryFor(mean).short}
+                    {categoryFor(mean, scale).short}
                   </Text>
                 </View>
               ) : null}
             </View>
 
-            <Chart points={days} />
-
+            <Chart points={days} scale={scale} />
             <View style={styles.legend}>
               {[
-                { label: 'Baik', color: colors.good },
-                { label: 'Sedang', color: colors.caution },
-                { label: 'Tidak Sehat', color: '#f0863c' },
+                { label: 'Baik', color: categoryFor(25, scale).color },
+                { label: 'Sedang', color: categoryFor(75, scale).color },
+                { label: 'Tidak Sehat', color: categoryFor(150, scale).color },
               ].map((entry) => (
                 <View key={entry.label} style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: entry.color }]} />

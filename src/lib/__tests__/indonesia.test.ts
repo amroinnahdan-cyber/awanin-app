@@ -58,6 +58,18 @@ describe('parseAqiBatch', () => {
     expect(parseAqiBatch(payload, CITIES.slice(0, 1))).toEqual([{ slug: 'bandung', aqi: 10 }]);
   });
 
+  it('keeps the PM2.5 concentration next to the AQI', () => {
+    const payload = [
+      { current: { us_aqi: 120, pm2_5: 70 } },
+      { current: { us_aqi: 45, pm2_5: null } },
+    ];
+    expect(parseAqiBatch(payload, CITIES)).toEqual([
+      { slug: 'bandung', aqi: 120, pm25: 70 },
+      // A null pm2_5 is absent from the reading, matching the API contract.
+      { slug: 'medan', aqi: 45 },
+    ]);
+  });
+
   it('survives an unexpected payload', () => {
     expect(parseAqiBatch(null, CITIES)).toEqual([]);
     expect(parseAqiBatch('nope', CITIES)).toEqual([]);
@@ -81,6 +93,20 @@ describe('buildRows', () => {
   it('skips readings without a matching city', () => {
     const rows = buildRows([{ slug: 'atlantis', aqi: 10 }], CITIES);
     expect(rows).toEqual([]);
+  });
+
+  it('displays ISPU from PM2.5 when the scale asks for it', () => {
+    // PM2.5 30.45 -> ISPU 69; a missing pm25 (medan) stays on the US value so
+    // a hidden fallback never relabels a US number as ISPU.
+    const rows = buildRows(
+      [
+        { slug: 'bandung', aqi: 110, pm25: 30.45 },
+        { slug: 'medan', aqi: 45, pm25: null },
+      ],
+      CITIES,
+      'ispu',
+    );
+    expect(rows.map((row) => row.aqi)).toEqual([45, 69]);
   });
 });
 
@@ -182,6 +208,33 @@ describe('parseHourlyTrend', () => {
   it('survives an unexpected payload', () => {
     expect(parseHourlyTrend(null, 'medan', Date.now())).toBeNull();
     expect(parseHourlyTrend({ hourly: { time: 'nope' } }, 'medan', Date.now())).toBeNull();
+  });
+
+  it('measures the 24-hour change in ISPU when asked', () => {
+    // 30.45 ug/m3 both days -> stable at ISPU 69 in the converted series,
+    // where the raw US AQI moved 110 -> 120.
+    const payload = {
+      hourly: {
+        time: ['2026-10-20T22:00', '2026-10-21T22:00'],
+        us_aqi: [110, 120],
+        pm2_5: [30.45, 30.45],
+      },
+    };
+    const now = Date.UTC(2026, 9, 21, 22, 30);
+    expect(parseHourlyTrend(payload, 'medan', now, 'ispu')).toEqual({
+      slug: 'medan',
+      delta: 0,
+      from: 69,
+      to: 69,
+      hours: 24,
+    });
+    expect(parseHourlyTrend(payload, 'medan', now, 'us')).toEqual({
+      slug: 'medan',
+      delta: 10,
+      from: 110,
+      to: 120,
+      hours: 24,
+    });
   });
 });
 

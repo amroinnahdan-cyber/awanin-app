@@ -17,6 +17,7 @@
  */
 import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { OpenMeteoTimeoutError } from '@/api/openMeteo';
+import type { IndexScale } from '@/lib/aqi';
 import {
   parseAqiBatch,
   parseHourlyTrend,
@@ -59,8 +60,9 @@ async function load(): Promise<IndonesiaReading> {
   url.searchParams.set('latitude', INDONESIA_CITIES.map((city) => city.latitude).join(','));
   url.searchParams.set('longitude', INDONESIA_CITIES.map((city) => city.longitude).join(','));
   // Only the current AQI: no hourly series, so the response stays small even
-  // for a hundred points.
-  url.searchParams.set('current', 'us_aqi');
+  // for a hundred points. pm2_5 rides along so the ISPU estimate needs no
+  // second batch.
+  url.searchParams.set('current', 'us_aqi,pm2_5');
 
   const response = await fetchWithTimeout(url.toString());
   if (!response.ok) {
@@ -101,7 +103,7 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
-const trendCache = new Map<string, { trend: AqiTrend; at: number }>();
+const trendCache = new Map<string, { us: AqiTrend | null; ispu: AqiTrend | null; at: number }>();
 
 /**
  * 24-hour change for a list of points: the six on the Beranda card, one city on
@@ -118,8 +120,9 @@ const trendCache = new Map<string, { trend: AqiTrend; at: number }>();
  */
 export async function fetchCityTrends(
   cities: TrendPoint[],
-  options: { now?: number } = {},
+  options: { now?: number; scale?: IndexScale } = {},
 ): Promise<Record<string, AqiTrend>> {
+  const scale = options.scale ?? 'us';
   const now = options.now ?? Date.now();
   const stale = cities.filter((city) => {
     const entry = trendCache.get(city.slug);
@@ -130,7 +133,9 @@ export async function fetchCityTrends(
     const url = new URL(ENDPOINT);
     url.searchParams.set('latitude', stale.map((city) => city.latitude).join(','));
     url.searchParams.set('longitude', stale.map((city) => city.longitude).join(','));
-    url.searchParams.set('hourly', 'us_aqi');
+    // Both fields in one payload: a later switch of scale inside the cache TTL
+    // then converts from memory instead of refetching a hundred cities.
+    url.searchParams.set('hourly', 'us_aqi,pm2_5');
     // 25 hours back keeps the comparison point available just after the hour
     // rolls over; one forecast hour keeps the newest sample current.
     url.searchParams.set('past_hours', '25');
@@ -144,15 +149,19 @@ export async function fetchCityTrends(
     const payload: unknown = await response.json();
     const list: unknown[] = Array.isArray(payload) ? payload : [payload];
     stale.forEach((city, index) => {
-      const trend = parseHourlyTrend(list[index], city.slug, now);
-      if (trend) trendCache.set(city.slug, { trend, at: now });
+      trendCache.set(city.slug, {
+        us: parseHourlyTrend(list[index], city.slug, now, 'us'),
+        ispu: parseHourlyTrend(list[index], city.slug, now, 'ispu'),
+        at: now,
+      });
     });
   }
 
   const result: Record<string, AqiTrend> = {};
   for (const city of cities) {
     const entry = trendCache.get(city.slug);
-    if (entry) result[city.slug] = entry.trend;
+    const trend = scale === 'ispu' ? entry?.ispu : entry?.us;
+    if (entry && trend) result[city.slug] = trend;
   }
   return result;
 }

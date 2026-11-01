@@ -19,7 +19,7 @@ const STEPS: Step[] = [
   {
     key: 'intro',
     icon: Wind,
-    title: 'Udara Jakarta, tanpa menebak',
+    title: 'Udara Indonesia, tanpa menebak',
     body: 'AQI terkini, prakiraan tujuh hari, dan riwayat dari Open-Meteo — semua di satu tempat.',
   },
   {
@@ -32,7 +32,7 @@ const STEPS: Step[] = [
     key: 'location',
     icon: MapPin,
     title: 'Pantau titikmu sendiri',
-    body: 'Pilih Monas, Bundaran HI, GBK, atau Kota Tua — atau izinkan Awanin membaca lokasi perangkat.',
+    body: 'Pilih kotamu dari 100 kota Indonesia — atau izinkan Awanin membaca lokasi perangkat.',
   },
 ];
 

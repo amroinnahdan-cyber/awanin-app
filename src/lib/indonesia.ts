@@ -6,17 +6,33 @@
  * list happens here — by index, never by the returned (grid-snapped) latitude
  * and longitude, which do not match the requested coordinates.
  */
+import { ispuForConcentration, type IndexScale } from '@/lib/aqi';
 import type { IndonesiaCity } from '@/data/indonesiaCities';
 
-export type CityAqi = { slug: string; aqi: number };
+/** `pm25` stays optional: legacy callers pass US-only readings, which then
+ * always display as US AQI. */
+export type CityAqi = {
+  slug: string;
+  /** US AQI, always present — the anchor of every conversion */
+  aqi: number;
+  /** PM2.5 concentration μg/m³; unavailable when the batch did not report it */
+  pm25?: number | null;
+};
 
 export type IndonesiaRow = { city: IndonesiaCity; aqi: number };
 
 export type CityFilter = 'semua' | 'baik' | 'sedang' | 'tidak';
 
 export type AqiBatchResponse = {
-  current?: { us_aqi?: unknown };
+  current?: { us_aqi?: unknown; pm2_5?: unknown };
 };
+
+/** The number a screen shows: US AQI, or the ISPU estimate from PM2.5. */
+export function displayedAqi(entry: CityAqi, scale: IndexScale = 'us'): number {
+  if (scale !== 'ispu' || entry.pm25 == null) return entry.aqi;
+  const ispu = ispuForConcentration('pm2_5', entry.pm25);
+  return ispu ?? entry.aqi;
+}
 
 /**
  * Joins a batch response to the requested cities by position. Missing or
@@ -29,17 +45,31 @@ export function parseAqiBatch(payload: unknown, cities: IndonesiaCity[]): CityAq
   list.forEach((entry, index) => {
     const city = cities[index];
     if (!city) return;
-    const value = (entry as AqiBatchResponse | null)?.current?.us_aqi;
+    const current = (entry as AqiBatchResponse | null)?.current;
+    const value = current?.us_aqi;
     if (typeof value !== 'number' || !Number.isFinite(value)) return;
-    readings.push({ slug: city.slug, aqi: Math.round(value) });
+    const pm25 = current?.pm2_5;
+    // Absent, not null, when the field is missing: `toEqual` then leaves the
+    // key out of the comparison, so older US-only tests keep passing.
+    readings.push({
+      slug: city.slug,
+      aqi: Math.round(value),
+      pm25: typeof pm25 === 'number' && Number.isFinite(pm25) ? pm25 : undefined,
+    });
   });
 
   return readings;
 }
 
-/** Joins readings to their city, cleanest first. */
-export function buildRows(readings: CityAqi[], cities: IndonesiaCity[]): IndonesiaRow[] {
-  const bySlug = new Map(readings.map((entry) => [entry.slug, entry.aqi] as const));
+/** Joins readings to their city, cleanest first, in the chosen index. */
+export function buildRows(
+  readings: CityAqi[],
+  cities: IndonesiaCity[],
+  scale: IndexScale = 'us',
+): IndonesiaRow[] {
+  const bySlug = new Map(
+    readings.map((entry) => [entry.slug, displayedAqi(entry, scale)] as const),
+  );
   const rows: IndonesiaRow[] = [];
   for (const city of cities) {
     const aqi = bySlug.get(city.slug);
@@ -92,7 +122,7 @@ export function describeTrend(trend: AqiTrend): string {
 }
 
 type HourlyPayload = {
-  hourly?: { time?: unknown; us_aqi?: unknown };
+  hourly?: { time?: unknown; us_aqi?: unknown; pm2_5?: unknown };
 };
 
 /**
@@ -115,8 +145,11 @@ function parseGmt(iso: string): number | null {
 const HOUR_MS = 3_600_000;
 
 /**
- * 24-hour change from an `hourly=us_aqi` block: the newest sample at or before
+ * 24-hour change from an hourly block: the newest sample at or before
  * `nowMs` minus the sample closest to 24 hours earlier.
+ *
+ * `scale: 'ispu'` converts each hourly PM2.5 point to its ISPU sub-index first,
+ * so the delta is measured on the same scale as the numbers shown.
  *
  * Returns null rather than a zero when either end is missing — a gap in the
  * model series must not read as "stable air".
@@ -125,10 +158,20 @@ export function parseHourlyTrend(
   payload: unknown,
   slug: string,
   nowMs: number,
+  scale: IndexScale = 'us',
 ): AqiTrend | null {
   const hourly = (payload as HourlyPayload | null)?.hourly;
   const times = Array.isArray(hourly?.time) ? (hourly.time as unknown[]) : null;
-  const values = Array.isArray(hourly?.us_aqi) ? (hourly.us_aqi as unknown[]) : null;
+  const rawValues = Array.isArray(hourly?.us_aqi) ? (hourly.us_aqi as unknown[]) : null;
+  const pmValues = Array.isArray(hourly?.pm2_5) ? (hourly.pm2_5 as unknown[]) : null;
+  const values: unknown[] | null =
+    scale === 'ispu' && pmValues
+      ? pmValues.map((value) =>
+          typeof value === 'number' && Number.isFinite(value)
+            ? ispuForConcentration('pm2_5', value)
+            : null,
+        )
+      : rawValues;
   if (!times || !values) return null;
 
   let nowIndex = -1;
