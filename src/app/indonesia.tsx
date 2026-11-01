@@ -9,7 +9,14 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, ChevronRight, RefreshCw, Search, X } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  ChevronRight,
+  MapPinned as MapPinnedIcon,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react-native';
 
 import { fetchIndonesiaAqi, type IndonesiaReading } from '@/api/indonesia';
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
@@ -17,7 +24,7 @@ import { TrendDelta } from '@/components/TrendDelta';
 import { Card, Chip, InlineError, SectionTitle, Skeleton } from '@/components/ui';
 import { useCityTrends } from '@/hooks/useAirQuality';
 import { useTopInset } from '@/hooks/useTopInset';
-import { categoryFor, readableOn } from '@/lib/aqi';
+import { categoryFor, indexSpoken, indexUnit, readableOn } from '@/lib/aqi';
 import {
   buildRows,
   describeTrend,
@@ -56,7 +63,8 @@ export default function IndonesiaScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const goBack = useBackOrHome('/');
-  const { selected } = useAppState();
+  const { selected, settings } = useAppState();
+  const scale = settings.indexScale;
   // A second request for the 24-hour trend of every city in the ranking. It is
   // cached per city for 30 minutes and shared with the Beranda card.
   const { data: trends } = useCityTrends(INDONESIA_CITIES);
@@ -101,7 +109,10 @@ export default function IndonesiaScreen() {
     };
   }, [load]);
 
-  const rows = useMemo(() => buildRows(reading?.readings ?? [], INDONESIA_CITIES), [reading]);
+  const rows = useMemo(
+    () => buildRows(reading?.readings ?? [], INDONESIA_CITIES, scale),
+    [reading, scale],
+  );
   const summary = useMemo(() => summarize(rows), [rows]);
   const visible = useMemo(
     () => filterRows(rows, { query, filter }),
@@ -112,7 +123,7 @@ export default function IndonesiaScreen() {
     [rows],
   );
 
-  const averageCategory = categoryFor(summary.average);
+  const averageCategory = categoryFor(summary.average, scale);
   const provinceCount = useMemo(
     () => new Set(INDONESIA_CITIES.map((city) => city.province)).size,
     [],
@@ -190,7 +201,7 @@ export default function IndonesiaScreen() {
                   {summary.average}
                 </Text>
                 <View style={styles.averageSide}>
-                  <Text style={styles.averageUnit}>AQI</Text>
+                  <Text style={styles.averageUnit}>{indexUnit(scale)}</Text>
                   <View style={[styles.badge, { backgroundColor: averageCategory.color }]}>
                     <Text
                       style={[
@@ -212,7 +223,9 @@ export default function IndonesiaScreen() {
                       {summary.cleanest.city.name}
                     </Text>
                     <View style={styles.extremeAqiRow}>
-                      <Text style={styles.extremeAqi}>AQI {summary.cleanest.aqi}</Text>
+                      <Text style={styles.extremeAqi}>
+                        {`${indexSpoken(scale)} ${summary.cleanest.aqi}`}
+                      </Text>
                       <TrendDelta trend={trends?.[summary.cleanest.city.slug]} />
                     </View>
                   </View>
@@ -225,8 +238,9 @@ export default function IndonesiaScreen() {
                       <Text style={styles.extremeName} numberOfLines={1}>
                         {summary.worst.city.name}
                       </Text>
-                      <View style={styles.extremeAqiRow}>
-                        <Text style={styles.extremeAqi}>AQI {summary.worst.aqi}</Text>
+                      <View style={styles.extremeAqiRow}>                        <Text style={styles.extremeAqi}>
+                          {`${indexSpoken(scale)} ${summary.worst.aqi}`}
+                        </Text>
                         <TrendDelta trend={trends?.[summary.worst.city.slug]} />
                       </View>
                     </View>
@@ -235,11 +249,34 @@ export default function IndonesiaScreen() {
               </View>
 
               <Text style={styles.summaryNote}>
-                {summary.clean} kota berudara baik · {summary.unhealthy} kota di atas AQI 100
+                {summary.clean} kota berudara baik · {summary.unhealthy} kota di atas{' '}
+                {indexSpoken(scale)} 100
               </Text>
             </>
           )}
         </Card>
+
+        {/**
+         * Peta gratis: Leaflet di atas tile OpenStreetMap, tanpa API key.
+         * Satu layar tap-friendly, angkanya dari batch 100 kota yang sama.
+         */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Buka peta udara Indonesia"
+          onPress={() => router.push('/peta')}
+          style={({ pressed }) => [styles.mapShortcut, pressed && styles.mapShortcutPressed]}
+        >
+          <View style={styles.mapShortcutIcon}>
+            <MapPinnedIcon size={17} color={colors.onAccent} strokeWidth={1.9} />
+          </View>
+          <View style={styles.mapShortcutText}>
+            <Text style={styles.mapShortcutTitle}>Lihat peta udara</Text>
+            <Text style={styles.mapShortcutHint}>
+              100 kota digambar langsung di peta OpenStreetMap — gratis, tanpa kunci API.
+            </Text>
+          </View>
+          <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
+        </Pressable>
 
         <View style={styles.search}>
           <Search size={18} color={colors.muted} strokeWidth={1.8} />
@@ -311,7 +348,7 @@ export default function IndonesiaScreen() {
             </Text>
           ) : (
             visible.map(({ city, aqi }, index) => {
-              const category = categoryFor(aqi);
+              const category = categoryFor(aqi, scale);
               const isSelected = selected.slug === city.slug;
               const rank = rankBySlug.get(city.slug);
               const trend = trends?.[city.slug];
@@ -321,7 +358,7 @@ export default function IndonesiaScreen() {
                   {index > 0 ? <View style={styles.divider} /> : null}
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`${city.name}, ${city.province}, AQI ${aqi}${
+                    accessibilityLabel={`${city.name}, ${city.province}, ${indexSpoken(scale)} ${aqi}${
                       trend ? `, ${describeTrend(trend)}` : ''
                     }. Buka detail`}
                     accessibilityState={{ selected: isSelected }}
@@ -368,7 +405,7 @@ export default function IndonesiaScreen() {
               : `${provinceCount} provinsi terpantau`}
           </Text>
           <Text style={styles.credit}>
-            Prakiraan AQI model CAMS (Open-Meteo), bukan stasiun pengukuran. Data kota:
+            Prakiraan {indexSpoken(scale)} model CAMS (Open-Meteo), bukan stasiun pengukuran. Data kota:
             GeoNames (CC BY 4.0).
           </Text>
         </View>
@@ -472,6 +509,37 @@ function createStyles(colors: ThemeColors) {
       color: colors.mutedText,
     },
     summaryNote: {
+      ...typo.caption,
+      color: colors.mutedText,
+    },
+    mapShortcut: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      padding: 12,
+      borderRadius: radius.card,
+      backgroundColor: colors.surface,
+    },
+    mapShortcutPressed: {
+      opacity: 0.85,
+    },
+    mapShortcutIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: radius.pill,
+      backgroundColor: colors.accent,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    mapShortcutText: {
+      flex: 1,
+      gap: 2,
+    },
+    mapShortcutTitle: {
+      ...typo.bodyStrong,
+      color: colors.ink,
+    },
+    mapShortcutHint: {
       ...typo.caption,
       color: colors.mutedText,
     },
