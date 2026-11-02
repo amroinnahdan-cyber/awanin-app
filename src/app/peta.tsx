@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 
@@ -24,6 +24,7 @@ import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /**
  * Free interactive map: Leaflet over OpenStreetMap tiles — no API key, no

@@ -1,9 +1,10 @@
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react-native';
 
 import { describeTrend, type AqiTrend } from '@/lib/indonesia';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 type Props = {
   trend: AqiTrend | undefined;

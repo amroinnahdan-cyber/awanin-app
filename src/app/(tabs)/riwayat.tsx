@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Line, Path } from 'react-native-svg';
 import { ArrowLeft, ChevronDown, MapPin } from 'lucide-react-native';
@@ -21,15 +21,18 @@ import {
 import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /** Open-Meteo keeps 92 days of hourly history; 90 is the largest clean window. */
 const CUSTOM_RANGES = [14, 60, 90];
 
-const AXIS_WIDTH = 24;
+const AXIS_WIDTH = 30;
 const PLOT_WIDTH = 294;
 const PLOT_HEIGHT = 140;
 const Y_MAX = 200;
-const Y_TICKS = [0, 50, 100, 150, 200];
+// Three gridlines, not five: at 140px of plot the five labels sat ~31px apart,
+// which a capped 1.3× label still crowded once the system font grew.
+const Y_TICKS = [0, 100, 200];
 
 function Chart({
   points,
@@ -51,6 +54,9 @@ function Chart({
     return PLOT_HEIGHT - (clamped / Y_MAX) * (PLOT_HEIGHT - 16) - 8;
   };
   const step = points.length > 1 ? PLOT_WIDTH / (points.length - 1) : 0;
+  // Roughly six labels whatever the range: at 90 days a fixed `% 5` printed
+  // eighteen of them on top of each other.
+  const labelStep = Math.max(1, Math.ceil(points.length / 6));
   const coords = points.map((point, index) => ({ x: index * step, y: yFor(point.avg) }));
 
   const line = coords
@@ -106,26 +112,24 @@ function Chart({
         </View>
 
         <View style={styles.chartLabels}>
-          {points.map((point, index) => (
-            <Text
-              key={point.day}
-              style={[
-                styles.chartLabel,
-                {
-                  left: index * step,
-                  color:
-                    points.length <= 7 ||
-                    index === 0 ||
-                    index === points.length - 1 ||
-                    index % 5 === 0
-                      ? colors.mutedText
-                      : 'transparent',
-                },
-              ]}
-            >
-              {dayLabel(point.day)}
-            </Text>
-          ))}
+          {points.map((point, index) => {
+            // Skip the glyph entirely for the in-between days. A transparent
+            // colour was not enough: Android still painted the letter, which
+            // is why 30 days read as one unbroken "MSSRKJS…" string.
+            const show =
+              points.length <= 7 ||
+              index === 0 ||
+              index === points.length - 1 ||
+              index % labelStep === 0;
+            return (
+              <Text
+                key={point.day}
+                style={[styles.chartLabel, { left: index * step, color: colors.mutedText }]}
+              >
+                {show ? dayLabel(point.day) : ''}
+              </Text>
+            );
+          })}
         </View>
       </View>
     </View>
@@ -313,10 +317,14 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.bg,
     },
     content: {
-      paddingBottom: 40,
+      // Tall enough to clear the tab bar even when the credit line wraps at a
+      // large system font; at 40 the last line sat under the bar.
+      paddingBottom: 96,
     },
     header: {
-      height: 56,
+      // minHeight so the two-line title is never clipped by its own box.
+      minHeight: 56,
+      paddingVertical: 8,
       paddingHorizontal: spacing.gutter,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -332,7 +340,7 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.section,
     },
     periods: {
-      height: 42,
+      minHeight: 42,
       borderRadius: radius.pill,
       backgroundColor: colors.tint,
       padding: 4,
@@ -358,7 +366,7 @@ function createStyles(colors: ThemeColors) {
       gap: 14,
     },
     summary: {
-      height: 61,
+      minHeight: 61,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       justifyContent: 'space-between' as const,
@@ -427,7 +435,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.mutedText,
     },
     chartLabels: {
-      height: 14,
+      minHeight: 14,
     },
     chartLabel: {
       position: 'absolute' as const,
@@ -435,11 +443,14 @@ function createStyles(colors: ThemeColors) {
       textAlign: 'center' as const,
     },
     legend: {
-      height: 13,
+      // Wraps instead of clipping "Tidak Sehat" on narrow screens.
+      minHeight: 13,
       flexDirection: 'row' as const,
+      flexWrap: 'wrap' as const,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
-      gap: 18,
+      columnGap: 18,
+      rowGap: 6,
     },
     legendItem: {
       flexDirection: 'row' as const,
@@ -460,7 +471,7 @@ function createStyles(colors: ThemeColors) {
       gap: 14,
     },
     pollutantRow: {
-      height: 17,
+      minHeight: 17,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 8,

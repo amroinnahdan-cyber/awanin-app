@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -33,6 +33,7 @@ import {
 import { usePushState } from '@/state/push';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 type SheetName = 'preferensi' | 'reset' | null;
 
@@ -181,8 +182,14 @@ export default function ProfilScreen() {
                   style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
                 >
                   <row.icon size={20} color={colors.accent} strokeWidth={1.8} />
-                  <Text style={styles.rowLabel}>{row.label}</Text>
-                  {row.value ? <Text style={styles.rowValue}>{row.value}</Text> : null}
+                  <Text style={styles.rowLabel} numberOfLines={1}>
+                    {row.label}
+                  </Text>
+                  {row.value ? (
+                    <Text style={styles.rowValue} numberOfLines={1}>
+                      {row.value}
+                    </Text>
+                  ) : null}
                   {row.trailing ? null : (
                     <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
                   )}
@@ -302,7 +309,8 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 24,
     },
     header: {
-      height: 56,
+      minHeight: 56,
+      paddingVertical: 8,
       paddingHorizontal: spacing.gutter,
       justifyContent: 'center' as const,
     },
@@ -373,6 +381,10 @@ function createStyles(colors: ThemeColors) {
     rowValue: {
       ...typo.caption,
       color: colors.mutedText,
+      // Yields before the label does, so "Preferensi" stays on one line and
+      // the value ellipsises instead of squeezing the label mid-word.
+      flexShrink: 1,
+      textAlign: 'right' as const,
     },
     segment: {
       paddingHorizontal: 6,

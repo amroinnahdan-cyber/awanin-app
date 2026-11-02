@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View, useColorScheme } from 'react-native';
+import { Pressable, View, useColorScheme } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,7 @@ import { hydrateAppState, useAppState } from '@/state/app';
 import { hydrateNotifications } from '@/state/notifications';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { darkColors, lightColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({

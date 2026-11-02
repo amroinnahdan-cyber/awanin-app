@@ -1,13 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+  ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ChevronRight, Crosshair, MapPin, RefreshCw } from 'lucide-react-native';
@@ -37,6 +30,7 @@ import {
 } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, shadow, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /**
  * "Sekitar" replaces the old hand-drawn map: there is no map artwork and no
@@ -240,10 +234,10 @@ export default function SekitarScreen() {
               <Text style={styles.heroEyebrow}>
                 {deviceCoords ? 'Posisi perangkat' : 'Posisi perangkat belum aktif'}
               </Text>
-              <Text style={styles.heroName} numberOfLines={1}>
+              <Text style={styles.heroName} numberOfLines={2}>
                 {deviceLocation ? deviceLocation.name : 'Lokasi belum terdeteksi'}
               </Text>
-              <Text style={styles.heroMeta} numberOfLines={2}>
+              <Text style={styles.heroMeta} numberOfLines={3}>
                 {deviceCoords
                   ? formatCoordinates(deviceCoords.latitude, deviceCoords.longitude)
                   : 'Izinkan akses lokasi agar Awanin membaca udara di tempatmu.'}
@@ -375,15 +369,26 @@ export default function SekitarScreen() {
         </Card>
 
         <View style={styles.filters}>
-          {FILTERS.map((entry) => (
-            <Chip
-              key={entry.key}
-              label={entry.label}
-              active={filter === entry.key}
-              onPress={() => setFilter(entry.key)}
-              style={styles.filterChip}
-            />
-          ))}
+          {/*
+            Horizontal scroll, same as the map's filter row: chips keep their
+            natural width, so no label is squeezed down to a bare pill.
+          */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterRow}
+          >
+            {FILTERS.map((entry) => (
+              <Chip
+                key={entry.key}
+                label={entry.label}
+                active={filter === entry.key}
+                onPress={() => setFilter(entry.key)}
+                style={styles.filterChip}
+              />
+            ))}
+          </ScrollView>
         </View>
 
         <View>
@@ -687,11 +692,18 @@ function createStyles(colors: ThemeColors) {
       color: colors.accent,
     },
     filters: {
-      height: 42,
+      minHeight: 42,
       borderRadius: radius.pill,
       backgroundColor: colors.tint,
       padding: 4,
       flexDirection: 'row' as const,
+      gap: 4,
+    },
+    filterScroll: {
+      flexGrow: 0,
+    },
+    filterRow: {
+      alignItems: 'center' as const,
       gap: 4,
     },
     filterChip: {

@@ -1,9 +1,10 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { InfoFaq, InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen';
 import { LinkRow } from '@/components/LinkRow';
 import { useThemedStyles } from '@/theme/ThemeProvider';
 import { type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 export default function BantuanScreen() {
   const styles = useThemedStyles(createStyles);

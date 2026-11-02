@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { BatteryFull, Signal, Wifi } from 'lucide-react-native';
 
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, spacing, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 function useClock(): string {
   const [now, setNow] = useState(() => new Date());

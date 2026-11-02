@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+  ActivityIndicator, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import {
   ArrowLeft,
@@ -37,6 +30,7 @@ import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { selectLocation, useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /**
  * Nationwide screen: one batched Open-Meteo call covers every city in the
@@ -238,7 +232,8 @@ export default function IndonesiaScreen() {
                       <Text style={styles.extremeName} numberOfLines={1}>
                         {summary.worst.city.name}
                       </Text>
-                      <View style={styles.extremeAqiRow}>                        <Text style={styles.extremeAqi}>
+                      <View style={styles.extremeAqiRow}>
+                        <Text style={styles.extremeAqi}>
                           {`${indexSpoken(scale)} ${summary.worst.aqi}`}
                         </Text>
                         <TrendDelta trend={trends?.[summary.worst.city.slug]} />
@@ -302,15 +297,27 @@ export default function IndonesiaScreen() {
         </View>
 
         <View style={styles.filters}>
-          {FILTERS.map((entry) => (
-            <Chip
-              key={entry.key}
-              label={entry.label}
-              active={filter === entry.key}
-              onPress={() => setFilter(entry.key)}
-              style={styles.filterChip}
-            />
-          ))}
+          {/*
+            Horizontal scroll, like the map's filter row: with `flexShrink: 0`
+            chips five labels do not fit a phone width, and the squeezed ones
+            lost their text entirely instead of overflowing.
+          */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterRow}
+          >
+            {FILTERS.map((entry) => (
+              <Chip
+                key={entry.key}
+                label={entry.label}
+                active={filter === entry.key}
+                onPress={() => setFilter(entry.key)}
+                style={styles.filterChip}
+              />
+            ))}
+          </ScrollView>
         </View>
 
         <View>
@@ -424,8 +431,11 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 40,
     },
     header: {
-      height: 56,
+      // minHeight: a two-line title at a large system font used to lose its
+      // second line to this box.
+      minHeight: 56,
       paddingHorizontal: spacing.gutter,
+      paddingVertical: 8,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 12,
@@ -565,11 +575,20 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 0,
     },
     filters: {
-      height: 42,
+      // minHeight, not height: the track grows with a larger system font
+      // instead of clipping the chips inside it.
+      minHeight: 42,
       borderRadius: radius.pill,
       backgroundColor: colors.tint,
       padding: 4,
       flexDirection: 'row' as const,
+      gap: 4,
+    },
+    filterScroll: {
+      flexGrow: 0,
+    },
+    filterRow: {
+      alignItems: 'center' as const,
       gap: 4,
     },
     filterChip: {

@@ -1,10 +1,11 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { InfoParagraph, InfoScreen, InfoSection } from '@/components/InfoScreen';
 import { LinkRow } from '@/components/LinkRow';
 import { ATTRIBUTION } from '@/api/openMeteo';
 import { useThemedStyles } from '@/theme/ThemeProvider';
 import { type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 const POINTS = [
   'Tidak ada akun, login, atau kata sandi.',

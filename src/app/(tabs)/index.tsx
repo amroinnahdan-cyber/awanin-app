@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Bell, Check, ChevronDown, ChevronRight, MapPin, Share2, Wind } from 'lucide-react-native';
@@ -29,6 +29,7 @@ import { useAppState } from '@/state/app';
 import { useNotifications } from '@/state/notifications';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 function PollutantValue({ pollutant }: { pollutant: PollutantReading | undefined }) {
   const styles = useThemedStyles(createStyles);

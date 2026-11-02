@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
-  Animated,
-  Easing,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  Animated, Easing, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
 import { useTopInset } from '@/hooks/useTopInset';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, shadow, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 type Props = {
   /** Called once the fade-out finishes. */

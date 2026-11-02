@@ -1,4 +1,4 @@
-import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, View } from 'react-native';
 
 import { ArrowLeft, Droplets, Leaf, ShieldCheck, Wind } from 'lucide-react-native';
 
@@ -11,6 +11,7 @@ import { useBackOrHome } from '@/lib/navigation';
 import { useAppState } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /** The four tips from the design showcase. */
 const TIPS = [

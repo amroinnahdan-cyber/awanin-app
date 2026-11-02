@@ -1,4 +1,4 @@
-import { ImageBackground, Pressable, ScrollView, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -40,6 +40,7 @@ import {
 } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 export default function DetailLokasiScreen() {
   const topInset = useTopInset();
@@ -370,14 +371,19 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       justifyContent: 'space-between' as const,
+      // A guaranteed gap: without it the label and the number met as "PM1041.6"
+      // once the system font grew.
+      gap: 10,
     },
     pollutantLabel: {
       ...typo.body,
       color: colors.mutedText,
+      flexShrink: 1,
     },
     pollutantValue: {
       ...typo.bodyStrong,
       color: colors.ink,
+      flexShrink: 0,
     },
     pollutantUnit: {
       ...typo.caption,

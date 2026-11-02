@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { DeviceStatusBar } from '@/components/DeviceStatusBar';
@@ -9,6 +9,7 @@ import { useTopInset } from '@/hooks/useTopInset';
 import { useBackOrHome } from '@/lib/navigation';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /**
  * Shared layout for the text screens behind the profile (Tentang, Bantuan,

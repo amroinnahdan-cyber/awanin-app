@@ -1,9 +1,10 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /** One-line navigation row for the text screens. */
 export function LinkRow({ label, href }: { label: string; href: Href }) {

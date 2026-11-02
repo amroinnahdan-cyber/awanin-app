@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, BellRing, Cloud, Lightbulb, MapPin, Server, Trash2 } from 'lucide-react-native';
 
@@ -24,6 +24,7 @@ import { updateSettings, useAppState } from '@/state/app';
 import { usePushState } from '@/state/push';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 type TestState = { kind: 'idle' | 'sending' | 'success' | 'error'; message: string };
 
@@ -386,7 +387,8 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 32,
     },
     header: {
-      height: 56,
+      minHeight: 56,
+      paddingVertical: 8,
       paddingHorizontal: spacing.gutter,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -426,15 +428,20 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       justifyContent: 'space-between' as const,
+      gap: 12,
     },
     feedTitle: {
       ...typo.bodyStrong,
       fontSize: 14,
       color: colors.ink,
+      // The title yields room to the action instead of running under it: at a
+      // large font the two used to collide and push the action off screen.
+      flexShrink: 1,
     },
     feedAction: {
       ...typo.caption,
       color: colors.accent,
+      flexShrink: 0,
     },
     feedItem: {
       flexDirection: 'row' as const,

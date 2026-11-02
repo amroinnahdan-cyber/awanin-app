@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Bell, MapPin, Wind } from 'lucide-react-native';
 
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -7,6 +7,7 @@ import { registerForPush } from '@/lib/push';
 import { updateSettings } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 type Step = {
   key: string;

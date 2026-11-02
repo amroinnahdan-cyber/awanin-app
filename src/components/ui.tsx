@@ -215,6 +215,9 @@ export function Chip({
     <Pressable
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      // The pill itself is 34dp tall; the 4dp halo lifts the touch area close
+      // to the 44dp minimum without changing the drawn size or the track.
+      hitSlop={5}
       onPress={onPress}
       style={[styles.chip, active ? styles.chipActive : styles.chipIdle, style]}
     >

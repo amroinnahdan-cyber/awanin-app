@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Switch, View } from 'react-native';
 import { X } from 'lucide-react-native';
 
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /**
  * Bottom sheet used by the location picker and by the profile's setting rows.

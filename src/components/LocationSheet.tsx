@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import { Check, Crosshair, Search, Star } from 'lucide-react-native';
 
 import { Sheet, SheetRow } from '@/components/Sheet';
@@ -15,6 +15,7 @@ import {
 } from '@/state/app';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
+import { Text } from '@/components/Text';
 
 /**
  * The one place a location is chosen: the home header, the history picker and
