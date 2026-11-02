@@ -1,19 +1,36 @@
 # Awanin — Landing Page
 
-Website publik produk (deliverable Fase Sell: *Landing Page*) untuk aplikasi
-Awanin — *Know Your Air*.
+Website publik produk (*Fase Sell: Landing Page*) untuk aplikasi Awanin —
+*Know Your Air*, versi 1.3.0.
 
 ## Isi
 
 Satu berkas statis [`index.html`](index.html) dengan CSS di dalamnya — tanpa
-framework, tanpa build step, tanpa dependensi eksternal (hanya font sistem).
-Aset (`logo-mark`, tangkapan layar Figma, ilustrasi splash, favicon) berada di
+framework dan tanpa build step. Satu-satunya permintaan eksternal adalah font
+Inter dari Google Fonts, dengan fallback font sistem bila offline. Aset
+(`logo-mark`, lima tangkapan layar aplikasi, favicon) berada di
 [`assets/`](assets).
 
-Bagian halaman: hero *Know Your Air*, masalah & solusi, 8 fitur utama, galeri 5
-layar dari ekspor Figma, bagian data & transparansi (Open-Meteo, batasan CAMS,
-GeoNames, cache backend), dan bagian unduhan (status APK + menjalankan lewat
-Expo Go).
+Bagian halaman: hero, statistik, masalah & solusi, 10 fitur, galeri 5 layar,
+data & transparansi (Open-Meteo, dua skala indeks, batasan CAMS, cache
+backend), dan bagian unduhan (APK + Expo Go).
+
+## Tangkapan layar
+
+Lima PNG di `assets/` adalah tangkapan layar **aplikasi versi 1.3.0**, bukan
+mockup Figma: diambil dari build web React Native yang sama pada viewport
+390×844 @2× (tema terang, data Jakarta Pusat), lalu dipakai apa adanya.
+
+| Berkas | Layar |
+| --- | --- |
+| `screen-beranda.png` | Beranda — ring AQI, polutan, prakiraan 5 hari, waktu terbaik olahraga |
+| `screen-sekitar.png` | Sekitar — posisi perangkat, AQI, jarak ke tiap titik |
+| `screen-riwayat.png` | Riwayat — tren 7 hari, rentang kustom, detail polutan |
+| `screen-indonesia.png` | Indonesia — rata-rata nasional, terbersih/terburuk, peringkat |
+| `screen-peta.png` | Peta — 100 kota di OpenStreetMap, mode AQI atau PM2.5 |
+
+Bila UI berubah, ambil ulang kelima layar di 390×844 (tema terang) dan timpa
+berkas dengan nama yang sama — halaman tidak perlu diubah.
 
 ## Menjalankan
 
@@ -24,23 +41,39 @@ cd landing
 python -m http.server 8123   # lalu buka http://127.0.0.1:8123
 ```
 
-## Deploy
+## Deploy ke Vercel
 
-Halaman ini file statis, jadi bisa dipakai di mana saja:
+Folder ini statis, jadi tidak ada perintah build. Ada dua cara:
 
-- **GitHub Pages** — salin isi folder ini ke branch `gh-pages`, atau pakai
-  GitHub Action `actions/upload-pages-artifact` dengan `path: landing`.
-- **Netlify / Vercel / Cloudflare Pages** — arahkan *publish directory* ke
-  `landing/` tanpa perintah build.
-- **Opsi termudah** — drag-and-drop foldernya di [Netlify Drop](https://app.netlify.com/drop).
+1. **Dashboard** — impor repo, lalu set *Root Directory* ke `awanin-app/landing`,
+   *Framework Preset* ke **Other**, dan biarkan *Build Command* serta
+   *Output Directory* kosong.
+2. **CLI** — dari dalam folder ini:
 
-Tautan unduhan APK di bagian *Coba Awanin* menunjuk ke halaman rilis GitHub
-(`…/releases`); ganti dengan URL unduhan langsung begitu APK produksi tersedia.
+   ```bash
+   npx vercel        # preview
+   npx vercel --prod # produksi
+   ```
+
+[`vercel.json`](vercel.json) menyalakan `cleanUrls`, mematikan trailing slash,
+dan memberi header cache satu tahun untuk `/assets/*` (nama berkas layar
+sengaja tidak ber-hash, jadi bila mengganti gambar pertimbangkan mengganti
+namanya juga).
+
+Hosting statis lain juga bisa: GitHub Pages, Netlify, atau Cloudflare Pages
+dengan *publish directory* `landing/`.
+
+Tautan unduhan APK menunjuk ke halaman rilis GitHub (`…/releases`); ganti
+dengan URL unduhan langsung begitu APK produksi tersedia.
 
 ## Catatan
 
-- Palet warna mengikuti token aplikasi (`src/theme/tokens.ts`): aksen `#1854c8`,
-  latar `#f5f9ff`, teks navy `#153c70`.
-- Tangkapan layar berasal dari ekspor Figma (canvas Hi-Fi), bukan screenshot
-  perangkat — ganti dengan screenshot nyata setelah APK rilis bila diinginkan.
-- Atribusi Open-Meteo dan GeoNames wajib dipertahankan (syarat lisensi).
+- Palet dan radius mengikuti `src/theme/tokens.ts`: latar `#f5f9ff`, teks navy
+  `#153c70`, aksen `#1854c8`, kategori Baik `#4abc78` / Sedang `#f5bb42` /
+  Sensitif `#f0863c` / Tidak Sehat `#ef6b56`.
+- Hero memakai gradien `heroSky → heroBottom` dan glow yang sama dengan kartu
+  hero di aplikasi; tidak ada foto stok atau ilustrasi lama.
+- `og:image` masih berupa path relatif. Setelah domain Vercel diketahui, ganti
+  dengan URL absolut agar preview tautan di media sosial muncul.
+- Atribusi Open-Meteo, OpenStreetMap, dan GeoNames wajib dipertahankan (syarat
+  lisensi).
