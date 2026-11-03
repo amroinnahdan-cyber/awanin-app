@@ -48,6 +48,9 @@
 
   html { scroll-behavior: smooth; }
 
+  /* Sections are jumped to from the sticky nav; keep their headings clear of it. */
+  section[id] { scroll-margin-top: 84px; }
+
   body {
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
@@ -768,6 +771,30 @@ npx expo start   # pindai QR dengan Expo Go</pre>
     </div>
   </div>
 </footer>
+
+<script>
+  // In-page anchors scroll smoothly but keep the address bar clean (no #fragment).
+  // Without JavaScript, the plain anchors still work as before.
+  (function () {
+    function reduced() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+    document.addEventListener('click', function (e) {
+      var link = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
+      if (!link) return;
+      var id = link.getAttribute('href');
+      if (!id || id.length < 2) return;
+      var target = document.getElementById(id.slice(1));
+      e.preventDefault();
+      if (target) {
+        target.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' });
+      }
+      history.replaceState(null, '', location.pathname);
+    });
+  })();
+</script>
 
 </body>
 </html>
