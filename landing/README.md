@@ -63,8 +63,9 @@ namanya juga).
 Hosting statis lain juga bisa: GitHub Pages, Netlify, atau Cloudflare Pages
 dengan *publish directory* `landing/`.
 
-Tautan unduhan APK menunjuk ke halaman rilis GitHub (`…/releases`); ganti
-dengan URL unduhan langsung begitu APK produksi tersedia.
+Tautan unduhan APK menunjuk langsung ke artefak EAS Build
+(`expo.dev/artifacts/eas/…apk`). Artefak EAS punya masa berlaku unduhan;
+saat APK baru dirilis, perbarui URL-nya serta label versi di kartu unduhan.
 
 ## Catatan
 
