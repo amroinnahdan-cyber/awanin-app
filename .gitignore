@@ -32,6 +32,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Firebase service account keys (private - never commit)
+fcm-server-key*.json
+*-firebase-adminsdk*.json
+
 # local env files (keep the examples in git)
 .env
 .env*.local

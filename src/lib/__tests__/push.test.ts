@@ -37,7 +37,11 @@ function loadPush(options: { os: 'android' | 'ios'; runningInExpoGo: boolean }):
   });
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('@/lib/push') as PushModule;
+  const mod = require('@/lib/push') as PushModule;
+  // The default build ships with remote push disabled (no google-services.json
+  // yet); tests that exercise the deep registration paths opt back in.
+  mod.setRemotePushEnabled(true);
+  return mod;
 }
 
 afterEach(() => {
@@ -45,6 +49,21 @@ afterEach(() => {
   jest.dontMock('expo');
   jest.dontMock('expo-notifications');
   jest.resetModules();
+});
+
+describe('remote push disabled by default', () => {
+  it('short-circuits before touching expo-notifications and stays calm', async () => {
+    const push = loadPush({ os: 'android', runningInExpoGo: false });
+    push.setRemotePushEnabled(false);
+
+    const registration = await push.registerForPush();
+    expect(registration.supported).toBe(false);
+    expect(registration.token).toBeNull();
+    expect(registration.reason).toMatch(/dimatikan sementara/);
+    expect(registration.reason).not.toMatch(/Firebase|FirebaseApp/);
+
+    expect(mockRequireNativePackage).not.toHaveBeenCalled();
+  });
 });
 
 describe('push in Expo Go on Android', () => {

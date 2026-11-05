@@ -77,6 +77,32 @@ export type PushRegistration = {
   reason: string | null;
 };
 
+/**
+ * Remote (server) push is switched OFF for now.
+ *
+ * Registering a token needs an FCM-capable build; that requires Google
+ * Services config (`google-services.json` dropped at the project root —
+ * `app.json` already points `android.googleServicesFile` at it) plus the FCM
+ * V1 credential uploaded to EAS. Until both exist, `getExpoPushTokenAsync`
+ * throws "Default FirebaseApp is not initialized" on Android and the app used
+ * to surface that scary raw Firebase message.
+ *
+ * While this flag is false, registration short-circuits before any native
+ * call: the onboarding and settings screens show a calm sentence instead, and
+ * in-app notifications keep working. Flip it to `true` once the Firebase
+ * project reaches apps/awanin; the deep paths below are untouched and fully
+ * wired for when it is turned on again (set `remotePushEnabled = true`).
+ */
+let remotePushEnabled = false;
+
+/** Test hook: opt back into the real registration paths below the flag. */
+export function setRemotePushEnabled(value: boolean): void {
+  remotePushEnabled = value;
+}
+
+const DISABLED_REASON =
+  'Push jarak jauh dimatikan sementara. Pengingat di dalam aplikasi tetap berjalan.';
+
 function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as
     | { eas?: { projectId?: string } }
@@ -94,6 +120,10 @@ function projectId(): string | null {
  * reason so the UI can explain the limitation instead of showing a dead switch.
  */
 export async function registerForPush(): Promise<PushRegistration> {
+  if (!remotePushEnabled) {
+    return { token: null, supported: false, reason: DISABLED_REASON };
+  }
+
   if (Platform.OS === 'web') {
     return {
       token: null,
