@@ -63,9 +63,11 @@ namanya juga).
 Hosting statis lain juga bisa: GitHub Pages, Netlify, atau Cloudflare Pages
 dengan *publish directory* `landing/`.
 
-Tautan unduhan APK menunjuk langsung ke artefak EAS Build
-(`expo.dev/artifacts/eas/…apk`). Artefak EAS punya masa berlaku unduhan;
-saat APK baru dirilis, perbarui URL-nya serta label versi di kartu unduhan.
+Tautan unduhan APK menunjuk ke aset GitHub Release
+(`github.com/amroinnahdan-cyber/awanin-app/releases/download/v1.3.1/awanin-1.3.1.apk`),
+bukan artefak EAS yang punya masa berlaku unduhan. Saat APK baru dirilis:
+buat release baru dengan nama aset `awanin-<versi>.apk`, lalu perbarui URL
+serta label versi di kartu unduhan halaman ini.
 
 ## Catatan
 

@@ -1,8 +1,11 @@
 name: "Build APK & publish release"
 
+# Manual only: the release APK is now built with EAS (`eas build --profile
+# preview -p android`), which already holds the signing keystore. The tag
+# trigger was removed because the keystore secrets it requires no longer exist
+# on this repository, so every tag pushed a workflow that could only fail.
+# Restore the `push: tags: ['v*']` trigger after re-adding those secrets.
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
