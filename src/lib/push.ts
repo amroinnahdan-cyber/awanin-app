@@ -103,6 +103,84 @@ export function setRemotePushEnabled(value: boolean): void {
 const DISABLED_REASON =
   'Push jarak jauh dimatikan sementara. Pengingat di dalam aplikasi tetap berjalan.';
 
+/**
+ * Local (on-device) notifications. They need no Firebase, no token, and no
+ * server: the OS shows them while the app is running, which is what the feed in
+ * `state/notifications` produces (daily digest, category change, health tip).
+ *
+ * Deliberately separate from the remote path above: these keep working even
+ * while `remotePushEnabled` is false, and every failure is swallowed so a
+ * runtime without the native module never breaks a reading.
+ */
+const AIR_QUALITY_CHANNEL = 'air-quality';
+
+type LocalNotification = {
+  title: string;
+  body: string;
+  /** Route slug of the location the notification is about */
+  slug: string;
+};
+
+async function ensureAirQualityChannel(notifications: NotificationsModule): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  const importance = notifications.AndroidImportance?.HIGH ?? 3;
+  await notifications.setNotificationChannelAsync(AIR_QUALITY_CHANNEL, {
+    name: 'Kualitas udara',
+    importance,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#1854c8',
+  });
+}
+
+/**
+ * Ask for notification permission, once, when the user turns notifications on.
+ * Returns whether notifications may be shown; a denied or unavailable runtime is
+ * reported as `false` rather than thrown.
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  const notifications = loadNotifications();
+  if (!notifications) return false;
+  try {
+    installNotificationHandler(notifications);
+    await ensureAirQualityChannel(notifications);
+    const existing = await notifications.getPermissionsAsync();
+    if (existing.status === 'granted') return true;
+    const requested = await notifications.requestPermissionsAsync();
+    return requested.status === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Present a local notification immediately (no scheduling, no server).
+ *
+ * Silently does nothing when the native module is missing or permission was
+ * declined — the in-app feed has already recorded the entry, so the user still
+ * sees it when opening the app.
+ */
+export async function presentLocalNotification(entry: LocalNotification): Promise<void> {
+  const notifications = loadNotifications();
+  if (!notifications) return;
+  try {
+    installNotificationHandler(notifications);
+    await ensureAirQualityChannel(notifications);
+    const permission = await notifications.getPermissionsAsync();
+    if (permission.status !== 'granted') return;
+    await notifications.scheduleNotificationAsync({
+      content: {
+        title: entry.title,
+        body: entry.body,
+        sound: 'default',
+        data: { slug: entry.slug },
+      },
+      trigger: null,
+    });
+  } catch {
+    // A notification must never take down the reading that produced it.
+  }
+}
+
 function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as
     | { eas?: { projectId?: string } }
@@ -165,15 +243,7 @@ export async function registerForPush(): Promise<PushRegistration> {
       };
     }
 
-    if (Platform.OS === 'android') {
-      const importance = notifications.AndroidImportance?.HIGH ?? 3;
-      await notifications.setNotificationChannelAsync('air-quality', {
-        name: 'Kualitas udara',
-        importance,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#1854c8',
-      });
-    }
+    await ensureAirQualityChannel(notifications);
 
     const id = projectId();
     if (!id) {

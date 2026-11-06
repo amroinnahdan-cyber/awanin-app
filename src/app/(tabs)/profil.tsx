@@ -23,6 +23,7 @@ import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
 import { indexUnit } from '@/lib/aqi';
+import { ensureNotificationPermission } from '@/lib/push';
 import { removeSubscription } from '@/lib/subscription';
 import {
   ALL_LOCATIONS,
@@ -91,7 +92,12 @@ export default function ProfilScreen() {
       trailing: (
         <Switch
           value={settings.notifMaster}
-          onValueChange={(next) => updateSettings({ notifMaster: next })}
+          onValueChange={(next) => {
+            updateSettings({ notifMaster: next });
+            // Turning notifications on is the right moment to ask the OS for
+            // permission; asking at first presentation would surprise the user.
+            if (next) void ensureNotificationPermission();
+          }}
           trackColor={{ true: colors.accent, false: colors.border }}
           thumbColor={colors.surface}
           accessibilityLabel="Aktifkan notifikasi"

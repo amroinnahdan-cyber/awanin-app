@@ -13,6 +13,7 @@ import { useTopInset } from '@/hooks/useTopInset';
 import { locationSlug } from '@/api/openMeteo';
 import { relativeTime } from '@/lib/format';
 import { useBackOrHome } from '@/lib/navigation';
+import { ensureNotificationPermission } from '@/lib/push';
 import { sendTestNotification, syncPushSubscription } from '@/lib/subscription';
 import {
   clearNotificationCache,
@@ -312,7 +313,12 @@ export default function NotifikasiScreen() {
           </View>
           <Switch
             value={settings.notifMaster}
-            onValueChange={(next) => updateSettings({ notifMaster: next })}
+            onValueChange={(next) => {
+              updateSettings({ notifMaster: next });
+              // Same handshake as Profil: the OS permission dialog belongs to the
+              // moment the user opts in, not to a reading that arrives later.
+              if (next) void ensureNotificationPermission();
+            }}
             trackColor={{ true: colors.accent, false: colors.border }}
             thumbColor={colors.surface}
             accessibilityLabel="Peringatan Kualitas Udara"
@@ -366,8 +372,9 @@ export default function NotifikasiScreen() {
         <View style={styles.legendRow}>
           <Lightbulb size={13} color={colors.mutedText} strokeWidth={1.8} />
           <Text style={styles.legendText}>
-            Notifikasi dalam aplikasi muncul saat aplikasi terbuka. Push dari server tetap
-            dikirim walau aplikasi ditutup — asalkan token terdaftar.
+            Notifikasi kualitas udara muncul di HP sebagai notifikasi Android selama aplikasi
+            berjalan. Push dari server tetap dikirim walau aplikasi ditutup — asalkan token
+            terdaftar.
           </Text>
         </View>
       </View>

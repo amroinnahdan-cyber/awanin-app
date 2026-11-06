@@ -83,6 +83,124 @@ describe('push in Expo Go on Android', () => {
   });
 });
 
+type NotificationsMock = {
+  status: 'granted' | 'denied' | 'undetermined';
+  requestStatus: 'granted' | 'denied';
+  setNotificationChannelAsync: jest.Mock;
+  scheduleNotificationAsync: jest.Mock;
+  requestPermissionsAsync: jest.Mock;
+};
+
+function loadPushWithNotificationsMock(options: {
+  os: 'android' | 'ios';
+  runningInExpoGo: boolean;
+  status?: 'granted' | 'denied' | 'undetermined';
+  requestStatus?: 'granted' | 'denied';
+}): { push: PushModule; api: NotificationsMock } {
+  jest.resetModules();
+
+  const api: NotificationsMock = {
+    status: options.status ?? 'granted',
+    requestStatus: options.requestStatus ?? 'granted',
+    setNotificationChannelAsync: jest.fn(async () => null),
+    scheduleNotificationAsync: jest.fn(async () => 'notification-id'),
+    requestPermissionsAsync: jest.fn(async () => ({ status: api.requestStatus })),
+  };
+
+  jest.doMock('react-native/Libraries/Utilities/Platform', () => ({
+    __esModule: true,
+    default: {
+      OS: options.os,
+      Version: 34,
+      isTesting: true,
+      select: (obj: Record<string, unknown>) =>
+        obj[options.os] !== undefined ? obj[options.os] : obj.default,
+    },
+  }));
+  jest.doMock('expo', () => ({
+    ...jest.requireActual('expo'),
+    isRunningInExpoGo: () => options.runningInExpoGo,
+  }));
+  jest.doMock('expo-notifications', () => ({
+    AndroidImportance: { HIGH: 4 },
+    setNotificationHandler: jest.fn(),
+    addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+    getPermissionsAsync: jest.fn(async () => ({ status: api.status })),
+    requestPermissionsAsync: api.requestPermissionsAsync,
+    setNotificationChannelAsync: api.setNotificationChannelAsync,
+    scheduleNotificationAsync: api.scheduleNotificationAsync,
+  }));
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const push = require('@/lib/push') as PushModule;
+  return { push, api };
+}
+
+describe('local notifications (no Firebase)', () => {
+  it('shows the feed entry as a device notification when permitted', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+    });
+
+    await push.presentLocalNotification({
+      title: 'Jakarta Pusat: kualitas udara kini sedang',
+      body: 'AQI tercatat 92.',
+      slug: 'jakarta-pusat',
+    });
+
+    expect(api.setNotificationChannelAsync).toHaveBeenCalledWith(
+      'air-quality',
+      expect.objectContaining({ name: 'Kualitas udara' }),
+    );
+    expect(api.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    expect(api.scheduleNotificationAsync).toHaveBeenCalledWith({
+      content: expect.objectContaining({
+        title: 'Jakarta Pusat: kualitas udara kini sedang',
+        body: 'AQI tercatat 92.',
+        data: { slug: 'jakarta-pusat' },
+      }),
+      trigger: null,
+    });
+  });
+
+  it('stays silent instead of prompting when permission was declined', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+      status: 'denied',
+    });
+
+    await push.presentLocalNotification({ title: 'Ringkasan', body: 'AQI 80.', slug: 'bandung' });
+
+    expect(api.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(api.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it('asks for permission when the user turns notifications on', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+      status: 'undetermined',
+      requestStatus: 'granted',
+    });
+
+    await expect(push.ensureNotificationPermission()).resolves.toBe(true);
+    expect(api.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('never touches the package in Expo Go on Android', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: true,
+    });
+
+    await expect(push.ensureNotificationPermission()).resolves.toBe(false);
+    await push.presentLocalNotification({ title: 'x', body: 'y', slug: 'z' });
+    expect(api.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+});
+
 describe('push outside Expo Go', () => {
   it('still loads the package and degrades gracefully when it throws', async () => {
     const push = loadPush({ os: 'android', runningInExpoGo: false });

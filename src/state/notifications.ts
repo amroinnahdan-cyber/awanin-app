@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { locationSlug } from '@/api/openMeteo';
 import { categoryFor, formatWib, indexUnit, shortDate, type IndexScale } from '@/lib/aqi';
 import { loadPersisted, savePersisted } from '@/lib/persist';
+import { presentLocalNotification } from '@/lib/push';
 
 export type AwaninNotification = {
   id: string;
@@ -74,6 +75,10 @@ function pushNotification(entry: Omit<AwaninNotification, 'id' | 'read'>) {
   items = [{ ...entry, id: `${Date.now()}-${items.length}`, read: false }, ...items].slice(0, 20);
   persist();
   emit();
+  // Mirror the entry as an on-device notification so it is visible without
+  // opening the app. Fire-and-forget: the feed above is the source of truth, and
+  // removing permission or the native module must not lose the entry.
+  void presentLocalNotification({ title: entry.title, body: entry.body, slug: entry.slug });
 }
 
 /** Baseline category per location: the first reading of a session is not an event. */
