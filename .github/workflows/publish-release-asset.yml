@@ -1,0 +1,57 @@
+name: Publish release asset
+
+# The APK is built by EAS (cloud) and is ~100 MB. Uploading it from a home
+# connection to uploads.github.com kept timing out (HTTP 408), so the release
+# asset is published from a GitHub runner instead: it downloads the EAS artifact
+# and attaches it to the existing release with the workflow token.
+#
+# Usage:
+#   gh workflow run publish-release-asset.yml \
+#     -f tag=v1.3.2 \
+#     -f url=https://expo.dev/artifacts/eas/<hash>.apk \
+#     -f name=awanin-1.3.2.apk
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (must already exist)'
+        required: true
+      url:
+        description: 'APK download URL (EAS build artifact)'
+        required: true
+      name:
+        description: 'Asset filename, e.g. awanin-1.3.2.apk'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the APK
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 5 -o "${ASSET_NAME}" "${ASSET_URL}"
+          echo "bytes=$(stat -c%s "${ASSET_NAME}")" >> "$GITHUB_OUTPUT"
+        env:
+          ASSET_NAME: ${{ inputs.name }}
+          ASSET_URL: ${{ inputs.url }}
+        id: download
+
+      - name: Check it is a real APK
+        run: |
+          set -euo pipefail
+          file "${ASSET_NAME}"
+          # An APK is a ZIP: refuse to publish an HTML error page as a download.
+          head -c 2 "${ASSET_NAME}" | grep -q 'PK'
+        env:
+          ASSET_NAME: ${{ inputs.name }}
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_NAME: ${{ inputs.name }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "${TAG}" "${ASSET_NAME}" --clobber
