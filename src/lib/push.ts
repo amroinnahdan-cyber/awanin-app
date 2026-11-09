@@ -251,6 +251,11 @@ export async function scheduleMorningReminders(entries: ReminderEntry[]): Promis
           type: notifications.SchedulableTriggerInputTypes.DATE,
           date: new Date(entry.at),
           channelId: AIR_QUALITY_CHANNEL,
+          // `setAlarmClock` alarms are never deferred by Doze or OEM battery
+          // policies; `bestEffort` uses setExactAndAllowWhileIdle, which some
+          // phones delay by minutes. expo-notifications falls back on its own
+          // when exact alarms are not permitted, so this is never fatal.
+          delivery: 'alarmClock',
         },
       });
       queued += 1;

@@ -251,7 +251,12 @@ describe('morning reminders (scheduled locally, no server)', () => {
         body: entry.body,
         data: { slug: 'jakarta-pusat', kind: 'morning-reminder' },
       }),
-      trigger: { type: 'date', date: new Date(entry.at), channelId: 'air-quality' },
+      trigger: {
+        type: 'date',
+        date: new Date(entry.at),
+        channelId: 'air-quality',
+        delivery: 'alarmClock',
+      },
     });
   });
 
