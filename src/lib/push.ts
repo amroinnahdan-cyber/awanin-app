@@ -266,6 +266,46 @@ export async function scheduleMorningReminders(entries: ReminderEntry[]): Promis
   }
 }
 
+/**
+ * Whether Android will let an exact alarm through.
+ *
+ * Android 14+ no longer grants `SCHEDULE_EXACT_ALARM` to newly installed apps, so
+ * the morning reminder silently falls back to an inexact alarm (minutes late
+ * under Doze) until the user flips "Alarms & reminders" on.
+ */
+export type ExactAlarmState = 'granted' | 'denied' | 'unavailable';
+
+async function readExactAlarm(
+  notifications: NotificationsModule,
+  request: boolean,
+): Promise<ExactAlarmState> {
+  if (Platform.OS !== 'android') return 'unavailable';
+  try {
+    const status = request
+      ? await notifications.requestExactAlarmPermissionsAsync()
+      : await notifications.getExactAlarmPermissionsAsync();
+    return status.status === 'granted' ? 'granted' : 'denied';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+export async function exactAlarmState(): Promise<ExactAlarmState> {
+  const notifications = loadNotifications();
+  if (!notifications) return 'unavailable';
+  return readExactAlarm(notifications, false);
+}
+
+/**
+ * Opens the system screen for exact alarms and re-reads the result when the user
+ * comes back. Resolves to `unavailable` on runtimes that cannot show it.
+ */
+export async function requestExactAlarmPermission(): Promise<ExactAlarmState> {
+  const notifications = loadNotifications();
+  if (!notifications) return 'unavailable';
+  return readExactAlarm(notifications, true);
+}
+
 function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as
     | { eas?: { projectId?: string } }

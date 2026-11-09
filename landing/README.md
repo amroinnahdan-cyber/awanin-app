@@ -1,7 +1,7 @@
 # Awanin — Landing Page
 
 Website publik produk (*Fase Sell: Landing Page*) untuk aplikasi Awanin —
-*Know Your Air*, versi 1.3.3.
+*Know Your Air*, versi 1.3.4.
 
 ## Isi
 
@@ -64,7 +64,7 @@ Hosting statis lain juga bisa: GitHub Pages, Netlify, atau Cloudflare Pages
 dengan *publish directory* `landing/`.
 
 Tautan unduhan APK menunjuk ke aset GitHub Release
-(`github.com/amroinnahdan-cyber/awanin-app/releases/download/v1.3.3/awanin-1.3.3.apk`),
+(`github.com/amroinnahdan-cyber/awanin-app/releases/download/v1.3.4/awanin-1.3.4.apk`),
 bukan artefak EAS yang punya masa berlaku unduhan.
 ### Checklist rilis APK baru
 

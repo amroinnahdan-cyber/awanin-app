@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, BellRing, Cloud, Lightbulb, MapPin, Server, Trash2 } from 'lucide-react-native';
 
@@ -13,7 +13,12 @@ import { useTopInset } from '@/hooks/useTopInset';
 import { locationSlug } from '@/api/openMeteo';
 import { relativeTime } from '@/lib/format';
 import { useBackOrHome } from '@/lib/navigation';
-import { ensureNotificationPermission } from '@/lib/push';
+import {
+  ensureNotificationPermission,
+  exactAlarmState,
+  requestExactAlarmPermission,
+  type ExactAlarmState,
+} from '@/lib/push';
 import { REMINDER_HOURS, reminderLabel } from '@/lib/reminders';
 import { sendTestNotification, syncPushSubscription } from '@/lib/subscription';
 import {
@@ -80,6 +85,22 @@ export default function NotifikasiScreen() {
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: 'idle', message: '' });
+  const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
+  const [exactAlarm, setExactAlarm] = useState<ExactAlarmState | null>(null);
+
+  // Android 14+ ships with exact alarms denied, and the reminder then falls back
+  // to an inexact alarm. Read the state whenever the reminder is on so the row
+  // below can offer the system screen instead of leaving the user to guess.
+  useEffect(() => {
+    if (!settings.notifMaster || !settings.morningReminder) return;
+    let alive = true;
+    void exactAlarmState().then((state) => {
+      if (alive) setExactAlarm(state);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [settings.notifMaster, settings.morningReminder]);
 
   const recent = notifications.slice(0, 3);
 
@@ -349,11 +370,29 @@ export default function NotifikasiScreen() {
             value={settings.notifMaster && settings.morningReminder}
             onChange={(next) => {
               updateSettings({ morningReminder: next });
-              // Same handshake as the master switch: ask the OS at the moment the
-              // user opts in, so the dialog has obvious context.
-              if (next) void ensureNotificationPermission();
+              if (!next) {
+                setPermissionNotice(null);
+                return;
+              }
+              // The OS dialog belongs to the moment the user opts in, and a refusal
+              // must undo the switch: an ON row that schedules nothing is a lie.
+              // Web has no scheduling at all, so it keeps the switch for previewing.
+              if (Platform.OS === 'web') return;
+              void ensureNotificationPermission().then((granted) => {
+                if (granted) {
+                  setPermissionNotice(null);
+                  return;
+                }
+                updateSettings({ morningReminder: false });
+                setPermissionNotice(
+                  'Izin notifikasi belum aktif, jadi pengingat pagi dimatikan. Izinkan notifikasi Awanin di setelan Android, lalu nyalakan lagi.',
+                );
+              });
             }}
           />
+          {permissionNotice ? (
+            <Text style={[styles.notice, { color: colors.caution }]}>{permissionNotice}</Text>
+          ) : null}
           {settings.notifMaster && settings.morningReminder ? (
             <View style={styles.hours}>
               {REMINDER_HOURS.map((hour) => {
@@ -362,7 +401,9 @@ export default function NotifikasiScreen() {
                   <Pressable
                     key={hour}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
+                    // `selected` alone is invisible to TalkBack on a radio; it reads
+                    // `checked`, so both are set.
+                    accessibilityState={{ selected: active, checked: active }}
                     accessibilityLabel={`Kirim pengingat pukul ${reminderLabel(hour)}`}
                     onPress={() => updateSettings({ reminderHour: hour })}
                     style={({ pressed }) => [
@@ -382,6 +423,20 @@ export default function NotifikasiScreen() {
               <Text style={styles.hoursHint}>
                 Dijadwalkan untuk tiga hari ke depan dan diperbarui tiap aplikasi dibuka.
               </Text>
+              {exactAlarm === 'denied' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Buka setelan Alarm dan pengingat"
+                  onPress={() =>
+                    void requestExactAlarmPermission().then((next) => setExactAlarm(next))
+                  }
+                  style={({ pressed }) => [pressed && styles.pressed]}
+                >
+                  <Text style={styles.exactAlarm}>
+                    Android 14+: izinkan “Alarm & pengingat” agar tidak telat — buka setelan
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
           <Divider />
@@ -630,6 +685,16 @@ function createStyles(colors: ThemeColors) {
       ...typo.bodyStrong,
       fontSize: 15,
       color: colors.onAccent,
+    },
+    notice: {
+      ...typo.micro,
+      paddingHorizontal: 6,
+      paddingBottom: 10,
+    },
+    exactAlarm: {
+      ...typo.micro,
+      color: colors.accent,
+      flexBasis: '100%' as const,
     },
     hours: {
       flexDirection: 'row' as const,

@@ -91,6 +91,9 @@ type NotificationsMock = {
   requestPermissionsAsync: jest.Mock;
   getAllScheduledNotificationsAsync: jest.Mock;
   cancelScheduledNotificationAsync: jest.Mock;
+  exactStatus: 'granted' | 'denied';
+  getExactAlarmPermissionsAsync: jest.Mock;
+  requestExactAlarmPermissionsAsync: jest.Mock;
 };
 
 function loadPushWithNotificationsMock(options: {
@@ -98,6 +101,7 @@ function loadPushWithNotificationsMock(options: {
   runningInExpoGo: boolean;
   status?: 'granted' | 'denied' | 'undetermined';
   requestStatus?: 'granted' | 'denied';
+  exactStatus?: 'granted' | 'denied';
 }): { push: PushModule; api: NotificationsMock } {
   jest.resetModules();
 
@@ -109,6 +113,9 @@ function loadPushWithNotificationsMock(options: {
     requestPermissionsAsync: jest.fn(async () => ({ status: api.requestStatus })),
     getAllScheduledNotificationsAsync: jest.fn(async () => [] as { identifier: string }[]),
     cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+    exactStatus: options.exactStatus ?? 'granted',
+    getExactAlarmPermissionsAsync: jest.fn(async () => ({ status: api.exactStatus })),
+    requestExactAlarmPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
   };
 
   jest.doMock('react-native/Libraries/Utilities/Platform', () => ({
@@ -135,6 +142,8 @@ function loadPushWithNotificationsMock(options: {
     scheduleNotificationAsync: api.scheduleNotificationAsync,
     getAllScheduledNotificationsAsync: api.getAllScheduledNotificationsAsync,
     cancelScheduledNotificationAsync: api.cancelScheduledNotificationAsync,
+    getExactAlarmPermissionsAsync: api.getExactAlarmPermissionsAsync,
+    requestExactAlarmPermissionsAsync: api.requestExactAlarmPermissionsAsync,
     // Mirrors the enum expo-notifications exports; only DATE is used here.
     SchedulableTriggerInputTypes: { DATE: 'date' },
   }));
@@ -224,6 +233,25 @@ describe('push outside Expo Go', () => {
 
     await push.registerForPush();
     expect(mockRequireNativePackage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('exact alarms (Android 14+)', () => {
+  it('reports a denied exact alarm and opens the system screen', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+      exactStatus: 'denied',
+    });
+
+    await expect(push.exactAlarmState()).resolves.toBe('denied');
+    await expect(push.requestExactAlarmPermission()).resolves.toBe('granted');
+    expect(api.requestExactAlarmPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('is unavailable where the platform has no exact alarms', async () => {
+    const { push } = loadPushWithNotificationsMock({ os: 'ios', runningInExpoGo: false });
+    await expect(push.exactAlarmState()).resolves.toBe('unavailable');
   });
 });
 
