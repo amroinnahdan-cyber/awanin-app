@@ -1,7 +1,7 @@
 # Awanin — Landing Page
 
 Website publik produk (*Fase Sell: Landing Page*) untuk aplikasi Awanin —
-*Know Your Air*, versi 1.3.0.
+*Know Your Air*, versi 1.3.1.
 
 ## Isi
 
@@ -13,7 +13,7 @@ Inter dari Google Fonts, dengan fallback font sistem bila offline. Aset
 
 Bagian halaman: hero, statistik, masalah & solusi, 10 fitur, galeri 5 layar,
 data & transparansi (Open-Meteo, dua skala indeks, batasan CAMS, cache
-backend), dan bagian unduhan (APK + Expo Go).
+backend), kuis edukasi, bagian "Yang baru" (notifikasi di perangkat), dan bagian unduhan (APK + Expo Go).
 
 ## Tangkapan layar
 
@@ -65,9 +65,15 @@ dengan *publish directory* `landing/`.
 
 Tautan unduhan APK menunjuk ke aset GitHub Release
 (`github.com/amroinnahdan-cyber/awanin-app/releases/download/v1.3.1/awanin-1.3.1.apk`),
-bukan artefak EAS yang punya masa berlaku unduhan. Saat APK baru dirilis:
-buat release baru dengan nama aset `awanin-<versi>.apk`, lalu perbarui URL
-serta label versi di kartu unduhan halaman ini.
+bukan artefak EAS yang punya masa berlaku unduhan.
+### Checklist rilis APK baru
+
+1. Buat release `v<versi>` dengan aset `awanin-<versi>.apk`.
+2. `index.html`: perbarui label versi di hero, eyebrow `#baru`, dan kartu
+   `#unduh`, plus URL aset di tombol unduh.
+3. Sesuaikan isi tiga kartu `#baru` bila cakupan rilis berubah.
+4. Perbarui baris versi di README ini.
+5. Deploy: `npx vercel --prod`; GitHub Pages ikut ter-deploy dari `master`.
 
 ## Catatan
 
@@ -76,7 +82,10 @@ serta label versi di kartu unduhan halaman ini.
   Sensitif `#f0863c` / Tidak Sehat `#ef6b56`.
 - Hero memakai gradien `heroSky → heroBottom` dan glow yang sama dengan kartu
   hero di aplikasi; tidak ada foto stok atau ilustrasi lama.
-- `og:image` masih berupa path relatif. Setelah domain Vercel diketahui, ganti
-  dengan URL absolut agar preview tautan di media sosial muncul.
+- `og:image`, `og:url`, `twitter:image`, dan `canonical` memakai domain absolut
+  `https://awanin-landing.vercel.app/` — crawler WhatsApp/Instagram/X tidak bisa
+  membaca path relatif. Ubah bila domain utama berganti.
+- `og:image` masih memakai tangkapan layar potret 390×844; untuk kartu 1.91:1
+  yang lebih rapi, ganti dengan gambar 1200×630 di `assets/`.
 - Atribusi Open-Meteo, OpenStreetMap, dan GeoNames wajib dipertahankan (syarat
   lisensi).
