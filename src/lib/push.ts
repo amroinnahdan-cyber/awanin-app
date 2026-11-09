@@ -181,6 +181,86 @@ export async function presentLocalNotification(entry: LocalNotification): Promis
   }
 }
 
+/**
+ * A notification the OS delivers on its own at a fixed moment.
+ *
+ * The copy is composed by `lib/reminders` so this file stays about the native
+ * call: title/body are final strings, `at` is an absolute epoch in ms.
+ */
+export type ReminderEntry = {
+  /** Local `YYYY-MM-DD`, also used to make the identifier idempotent */
+  date: string;
+  at: number;
+  title: string;
+  body: string;
+  slug: string;
+};
+
+/** Only reminders carry this prefix, so cancelling never touches other alerts. */
+export const REMINDER_ID_PREFIX = 'awanin-morning-';
+
+async function cancelQueuedReminders(notifications: NotificationsModule): Promise<void> {
+  const queued = await notifications.getAllScheduledNotificationsAsync();
+  for (const request of queued) {
+    const identifier = request.identifier ?? '';
+    if (identifier.startsWith(REMINDER_ID_PREFIX)) {
+      await notifications.cancelScheduledNotificationAsync(identifier);
+    }
+  }
+}
+
+export async function cancelMorningReminders(): Promise<void> {
+  const notifications = loadNotifications();
+  if (!notifications) return;
+  try {
+    await cancelQueuedReminders(notifications);
+  } catch {
+    // A runtime without scheduling support simply has nothing queued.
+  }
+}
+
+/**
+ * Queue one dated notification per forecast day, replacing the previous queue.
+ *
+ * Uses a `DATE` trigger so Android delivers it with the app closed; the channel
+ * keeps it grouped with the other air-quality alerts. Returns how many were
+ * actually queued (0 when the module, permission, or platform is missing).
+ */
+export async function scheduleMorningReminders(entries: ReminderEntry[]): Promise<number> {
+  if (entries.length === 0) return 0;
+  const notifications = loadNotifications();
+  if (!notifications) return 0;
+  try {
+    installNotificationHandler(notifications);
+    await ensureAirQualityChannel(notifications);
+    const permission = await notifications.getPermissionsAsync();
+    if (permission.status !== 'granted') return 0;
+    await cancelQueuedReminders(notifications);
+
+    let queued = 0;
+    for (const entry of entries) {
+      await notifications.scheduleNotificationAsync({
+        identifier: `${REMINDER_ID_PREFIX}${entry.date}`,
+        content: {
+          title: entry.title,
+          body: entry.body,
+          sound: 'default',
+          data: { slug: entry.slug, kind: 'morning-reminder' },
+        },
+        trigger: {
+          type: notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(entry.at),
+          channelId: AIR_QUALITY_CHANNEL,
+        },
+      });
+      queued += 1;
+    }
+    return queued;
+  } catch {
+    return 0;
+  }
+}
+
 function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as
     | { eas?: { projectId?: string } }

@@ -1,7 +1,7 @@
 # Awanin — Landing Page
 
 Website publik produk (*Fase Sell: Landing Page*) untuk aplikasi Awanin —
-*Know Your Air*, versi 1.3.1.
+*Know Your Air*, versi 1.3.2.
 
 ## Isi
 
@@ -13,7 +13,7 @@ Inter dari Google Fonts, dengan fallback font sistem bila offline. Aset
 
 Bagian halaman: hero, statistik, masalah & solusi, 10 fitur, galeri 5 layar,
 data & transparansi (Open-Meteo, dua skala indeks, batasan CAMS, cache
-backend), kuis edukasi, bagian "Yang baru" (notifikasi di perangkat), dan bagian unduhan (APK + Expo Go).
+backend), kuis edukasi, bagian "Yang baru" (pengingat pagi terjadwal), dan bagian unduhan (APK + Expo Go).
 
 ## Tangkapan layar
 
@@ -64,7 +64,7 @@ Hosting statis lain juga bisa: GitHub Pages, Netlify, atau Cloudflare Pages
 dengan *publish directory* `landing/`.
 
 Tautan unduhan APK menunjuk ke aset GitHub Release
-(`github.com/amroinnahdan-cyber/awanin-app/releases/download/v1.3.1/awanin-1.3.1.apk`),
+(`github.com/amroinnahdan-cyber/awanin-app/releases/download/v1.3.2/awanin-1.3.2.apk`),
 bukan artefak EAS yang punya masa berlaku unduhan.
 ### Checklist rilis APK baru
 

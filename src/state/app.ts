@@ -51,8 +51,12 @@ export type AppSettings = {
   badAirAlerts: boolean;
   /** "Tips Kesehatan" — attach a health tip to notifications */
   tipsHealth: boolean;
-  /** "Update Cuaca" — once-a-day digest of reading + weather */
+  /** "Ringkasan harian" — once-a-day digest when a reading is recorded */
   weatherUpdate: boolean;
+  /** "Pengingat pagi" — scheduled notification built from the forecast */
+  morningReminder: boolean;
+  /** Hour (24h) the morning reminder rings, in the location's own zone */
+  reminderHour: number;
   temperatureUnit: TemperatureUnit;
   /** Which index the app displays: US AQI or Indonesian ISPU */
   indexScale: IndexScale;
@@ -82,6 +86,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   badAirAlerts: true,
   tipsHealth: true,
   weatherUpdate: false,
+  morningReminder: false,
+  reminderHour: 6,
   temperatureUnit: 'C',
   indexScale: 'us',
   themeMode: 'system',

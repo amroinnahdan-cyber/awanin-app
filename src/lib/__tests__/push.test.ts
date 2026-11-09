@@ -89,6 +89,8 @@ type NotificationsMock = {
   setNotificationChannelAsync: jest.Mock;
   scheduleNotificationAsync: jest.Mock;
   requestPermissionsAsync: jest.Mock;
+  getAllScheduledNotificationsAsync: jest.Mock;
+  cancelScheduledNotificationAsync: jest.Mock;
 };
 
 function loadPushWithNotificationsMock(options: {
@@ -105,6 +107,8 @@ function loadPushWithNotificationsMock(options: {
     setNotificationChannelAsync: jest.fn(async () => null),
     scheduleNotificationAsync: jest.fn(async () => 'notification-id'),
     requestPermissionsAsync: jest.fn(async () => ({ status: api.requestStatus })),
+    getAllScheduledNotificationsAsync: jest.fn(async () => [] as { identifier: string }[]),
+    cancelScheduledNotificationAsync: jest.fn(async () => undefined),
   };
 
   jest.doMock('react-native/Libraries/Utilities/Platform', () => ({
@@ -129,6 +133,10 @@ function loadPushWithNotificationsMock(options: {
     requestPermissionsAsync: api.requestPermissionsAsync,
     setNotificationChannelAsync: api.setNotificationChannelAsync,
     scheduleNotificationAsync: api.scheduleNotificationAsync,
+    getAllScheduledNotificationsAsync: api.getAllScheduledNotificationsAsync,
+    cancelScheduledNotificationAsync: api.cancelScheduledNotificationAsync,
+    // Mirrors the enum expo-notifications exports; only DATE is used here.
+    SchedulableTriggerInputTypes: { DATE: 'date' },
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -216,5 +224,71 @@ describe('push outside Expo Go', () => {
 
     await push.registerForPush();
     expect(mockRequireNativePackage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('morning reminders (scheduled locally, no server)', () => {
+  const entry = {
+    date: '2026-11-10',
+    at: Date.UTC(2026, 10, 9, 23),
+    title: 'Selamat pagi · Jakarta Pusat',
+    body: 'US AQI prakiraan 10 Nov: 95 (Sedang). Udara sedang, tetap jaga kondisi tubuhmu.',
+    slug: 'jakarta-pusat',
+  };
+
+  it('queues one dated notification per forecast day', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+    });
+
+    await expect(push.scheduleMorningReminders([entry])).resolves.toBe(1);
+
+    expect(api.scheduleNotificationAsync).toHaveBeenCalledWith({
+      identifier: 'awanin-morning-2026-11-10',
+      content: expect.objectContaining({
+        title: entry.title,
+        body: entry.body,
+        data: { slug: 'jakarta-pusat', kind: 'morning-reminder' },
+      }),
+      trigger: { type: 'date', date: new Date(entry.at), channelId: 'air-quality' },
+    });
+  });
+
+  it('cancels only its own queued reminders', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+    });
+    api.getAllScheduledNotificationsAsync.mockResolvedValue([
+      { identifier: 'awanin-morning-2026-11-01' },
+      { identifier: 'someone-else' },
+    ]);
+
+    await push.cancelMorningReminders();
+
+    expect(api.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
+    expect(api.cancelScheduledNotificationAsync).toHaveBeenCalledWith('awanin-morning-2026-11-01');
+  });
+
+  it('queues nothing when permission was declined', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: false,
+      status: 'denied',
+    });
+
+    await expect(push.scheduleMorningReminders([entry])).resolves.toBe(0);
+    expect(api.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it('never touches the package in Expo Go on Android', async () => {
+    const { push, api } = loadPushWithNotificationsMock({
+      os: 'android',
+      runningInExpoGo: true,
+    });
+
+    await expect(push.scheduleMorningReminders([entry])).resolves.toBe(0);
+    expect(api.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });

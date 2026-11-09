@@ -14,6 +14,7 @@ import { locationSlug } from '@/api/openMeteo';
 import { relativeTime } from '@/lib/format';
 import { useBackOrHome } from '@/lib/navigation';
 import { ensureNotificationPermission } from '@/lib/push';
+import { REMINDER_HOURS, reminderLabel } from '@/lib/reminders';
 import { sendTestNotification, syncPushSubscription } from '@/lib/subscription';
 import {
   clearNotificationCache,
@@ -202,7 +203,7 @@ export default function NotifikasiScreen() {
             <Text style={styles.emptyTitle}>Belum ada notifikasi</Text>
             <Text style={styles.emptyBody}>
               Awanin mencatat perubahan kategori AQI di lokasi yang kamu pantau, dan
-              mengirim ringkasan harian kalau “Update Cuaca” dinyalakan.
+              mengirim ringkasan harian kalau “Ringkasan harian” dinyalakan.
             </Text>
           </Card>
         )}
@@ -215,7 +216,9 @@ export default function NotifikasiScreen() {
             <View style={styles.serverText}>
               <Text style={styles.serverTitle}>Server & push</Text>
               <Text style={styles.serverBody}>
-                {backendConfigured() ? push.message : 'Backend belum dikonfigurasi.'}
+                {backendConfigured()
+                  ? push.message
+                  : 'Tidak aktif. Semua notifikasi berjalan di perangkat ini.'}
               </Text>
             </View>
             <View
@@ -275,11 +278,6 @@ export default function NotifikasiScreen() {
             </Text>
           ) : null}
 
-          {!backendConfigured() ? (
-            <Text style={styles.testMessage}>
-              Jalankan `awanin-server` lalu set EXPO_PUBLIC_API_URL untuk mengaktifkan push.
-            </Text>
-          ) : null}
         </Card>
 
         {remote.items.length > 0 ? (
@@ -342,10 +340,61 @@ export default function NotifikasiScreen() {
           />
           <Divider />
           <SwitchRow
-            label="Update Cuaca"
-            hint="Ringkasan harian: AQI & cuaca"
-            value={settings.notifMaster && settings.weatherUpdate}
+            label="Pengingat pagi"
+            hint={
+              settings.notifMaster && settings.morningReminder
+                ? `Terjadwal ${reminderLabel(settings.reminderHour)} — tetap masuk walau aplikasi ditutup`
+                : 'Prakiraan pagi dijadwalkan oleh Android, tanpa server'
+            }
+            value={settings.notifMaster && settings.morningReminder}
+            onChange={(next) => {
+              updateSettings({ morningReminder: next });
+              // Same handshake as the master switch: ask the OS at the moment the
+              // user opts in, so the dialog has obvious context.
+              if (next) void ensureNotificationPermission();
+            }}
+          />
+          {settings.notifMaster && settings.morningReminder ? (
+            <View style={styles.hours}>
+              {REMINDER_HOURS.map((hour) => {
+                const active = settings.reminderHour === hour;
+                return (
+                  <Pressable
+                    key={hour}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Kirim pengingat pukul ${reminderLabel(hour)}`}
+                    onPress={() => updateSettings({ reminderHour: hour })}
+                    style={({ pressed }) => [
+                      styles.hourChip,
+                      active && styles.hourChipActive,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={[styles.hourChipLabel, active && styles.hourChipLabelActive]}
+                    >
+                      {reminderLabel(hour)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              <Text style={styles.hoursHint}>
+                Dijadwalkan untuk tiga hari ke depan dan diperbarui tiap aplikasi dibuka.
+              </Text>
+            </View>
+          ) : null}
+          <Divider />
+          <SwitchRow
+            label="Ringkasan harian"
+            hint={
+              settings.morningReminder
+                ? 'Nonaktif — pengingat pagi sudah membawa ringkasan hari ini'
+                : 'AQI & cuaca saat aplikasi dibuka'
+            }
+            value={settings.notifMaster && settings.weatherUpdate && !settings.morningReminder}
             onChange={(next) => updateSettings({ weatherUpdate: next })}
+            disabled={settings.morningReminder}
           />
         </Card>
 
@@ -372,9 +421,8 @@ export default function NotifikasiScreen() {
         <View style={styles.legendRow}>
           <Lightbulb size={13} color={colors.mutedText} strokeWidth={1.8} />
           <Text style={styles.legendText}>
-            Notifikasi kualitas udara muncul di HP sebagai notifikasi Android selama aplikasi
-            berjalan. Push dari server tetap dikirim walau aplikasi ditutup — asalkan token
-            terdaftar.
+            Peringatan kategori muncul saat aplikasi membaca data. Pengingat pagi dijadwalkan
+            oleh Android, jadi tetap masuk walau aplikasi ditutup — tanpa server dan tanpa akun.
           </Text>
         </View>
       </View>
@@ -582,6 +630,37 @@ function createStyles(colors: ThemeColors) {
       ...typo.bodyStrong,
       fontSize: 15,
       color: colors.onAccent,
+    },
+    hours: {
+      flexDirection: 'row' as const,
+      flexWrap: 'wrap' as const,
+      gap: 8,
+      paddingHorizontal: 6,
+      paddingBottom: 12,
+    },
+    hourChip: {
+      height: 34,
+      paddingHorizontal: 14,
+      borderRadius: radius.pill,
+      backgroundColor: colors.tint,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    hourChipActive: {
+      backgroundColor: colors.accent,
+    },
+    hourChipLabel: {
+      ...typo.caption,
+      fontFamily: font.bold,
+      color: colors.mutedText,
+    },
+    hourChipLabelActive: {
+      color: colors.onAccent,
+    },
+    hoursHint: {
+      ...typo.micro,
+      color: colors.mutedText,
+      flexBasis: '100%' as const,
     },
     legendRow: {
       flexDirection: 'row' as const,

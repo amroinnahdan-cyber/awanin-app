@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
+  AlarmClock,
   Bell,
   ChevronRight,
   Info,
@@ -11,7 +12,6 @@ import {
   RotateCcw,
   Send,
   SlidersHorizontal,
-  Wifi,
   Wind,
 } from 'lucide-react-native';
 
@@ -23,6 +23,7 @@ import { INDONESIA_CITIES } from '@/data/indonesiaCities';
 import { useShare } from '@/hooks/useShare';
 import { useTopInset } from '@/hooks/useTopInset';
 import { indexUnit } from '@/lib/aqi';
+import { reminderLabel } from '@/lib/reminders';
 import { ensureNotificationPermission } from '@/lib/push';
 import { removeSubscription } from '@/lib/subscription';
 import {
@@ -31,7 +32,6 @@ import {
   updateSettings,
   useAppState,
 } from '@/state/app';
-import { usePushState } from '@/state/push';
 import { useTheme, useThemedStyles } from '@/theme/ThemeProvider';
 import { font, radius, spacing, type as typo, type ThemeColors } from '@/theme/tokens';
 import { Text } from '@/components/Text';
@@ -47,14 +47,6 @@ type SettingRow = {
   trailing?: ReactNode;
 };
 
-const PUSH_LABEL: Record<string, string> = {
-  idle: 'Belum tersambung',
-  syncing: 'Menyinkronkan…',
-  connected: 'Aktif di server',
-  unsupported: 'Terbatas',
-  error: 'Gagal tersambung',
-};
-
 /**
  * Profile rows follow the design showcase: location, notification toggle,
  * preferences, about, share, sign out. Every row does something real.
@@ -64,7 +56,6 @@ export default function ProfilScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { selected, favorites, settings } = useAppState();
-  const push = usePushState();
   const [sheet, setSheet] = useState<SheetName>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const { state: shareState, share } = useShare();
@@ -105,10 +96,12 @@ export default function ProfilScreen() {
       ),
     },
     {
-      key: 'server',
-      label: 'Server & push',
-      value: PUSH_LABEL[push.status] ?? 'Belum tersambung',
-      icon: Wifi,
+      key: 'pengingat',
+      label: 'Pengingat & jenis',
+      value: settings.morningReminder
+        ? `${reminderLabel(settings.reminderHour)} tiap hari`
+        : 'Atur',
+      icon: AlarmClock,
       onPress: () => router.push('/notifikasi'),
     },
     {

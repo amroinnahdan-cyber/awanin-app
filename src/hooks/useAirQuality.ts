@@ -11,6 +11,7 @@ import { fetchAirSmart, fetchAqiSmart, fetchHistorySmart } from '@/api/gateway';
 import { ALL_LOCATIONS, useAppState } from '@/state/app';
 import { displayIndexFor } from '@/lib/aqi';
 import { recordReading } from '@/state/notifications';
+import { syncMorningReminder } from '@/lib/reminders';
 
 type AsyncState<T> = {
   data: T | null;
@@ -107,7 +108,8 @@ export function useCurrentAir() {
       },
       {
         alertsEnabled: settings.notifMaster && settings.badAirAlerts,
-        dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
+        dailySummaryEnabled:
+          settings.notifMaster && settings.weatherUpdate && !settings.morningReminder,
         tipsEnabled: settings.tipsHealth,
       },
     );
@@ -117,6 +119,8 @@ export function useCurrentAir() {
     settings.notifMaster,
     settings.badAirAlerts,
     settings.weatherUpdate,
+    settings.morningReminder,
+    settings.reminderHour,
     settings.tipsHealth,
   ]);
 }
@@ -131,6 +135,17 @@ export function useSelectedAir() {
   const scale = settings.indexScale;
   return useAsync<CurrentReading>(async (options) => {
     const reading = await fetchAirSmart(selected.location, selected.slug, options, scale);
+    // Queue the morning reminder from the forecast this reading already carries.
+    // Fire-and-forget: a slow or refused schedule must not delay the reading.
+    void syncMorningReminder({
+      enabled: settings.notifMaster && settings.morningReminder,
+      hour: settings.reminderHour,
+      place: selected.name,
+      slug: selected.slug,
+      timezone: selected.location.timezone,
+      scale,
+      forecast: reading.forecast ?? [],
+    });
     recordReading(
       {
         aqi: reading.aqi,
@@ -142,7 +157,8 @@ export function useSelectedAir() {
       },
       {
         alertsEnabled: settings.notifMaster && settings.badAirAlerts,
-        dailySummaryEnabled: settings.notifMaster && settings.weatherUpdate,
+        dailySummaryEnabled:
+          settings.notifMaster && settings.weatherUpdate && !settings.morningReminder,
         tipsEnabled: settings.tipsHealth,
       },
     );
@@ -155,6 +171,8 @@ export function useSelectedAir() {
     settings.notifMaster,
     settings.badAirAlerts,
     settings.weatherUpdate,
+    settings.morningReminder,
+    settings.reminderHour,
     settings.tipsHealth,
   ]);
 }

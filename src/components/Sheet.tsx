@@ -116,16 +116,19 @@ export function SwitchRow({
   hint,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   hint?: string;
   value: boolean;
   onChange: (next: boolean) => void;
+  /** Shown but not tappable — used for a row whose job another switch took over */
+  disabled?: boolean;
 }) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, disabled && styles.rowDisabled]}>
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
         {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
@@ -133,6 +136,7 @@ export function SwitchRow({
       <Switch
         accessibilityLabel={label}
         value={value}
+        disabled={disabled}
         onValueChange={onChange}
         trackColor={{ false: colors.border, true: colors.accent }}
         thumbColor={colors.surface}
@@ -255,6 +259,9 @@ function createStyles(colors: ThemeColors) {
     },
     rowPressed: {
       backgroundColor: colors.tint,
+    },
+    rowDisabled: {
+      opacity: 0.5,
     },
     rowIcon: {
       width: 34,
