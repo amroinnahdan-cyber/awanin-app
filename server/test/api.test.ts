@@ -158,6 +158,15 @@ describe('Awanin API', () => {
     assert.equal(response.body.series[0].avg, 90);
   });
 
+  it('serves history for a nationwide city slug', async () => {
+    const response = await request(harness.app)
+      .get('/v1/air/bandung/history')
+      .query({ days: 7 })
+      .expect(200);
+    assert.equal(response.body.location.name, 'Bandung');
+    assert.equal(response.body.series[0].avg, 90);
+  });
+
   it('registers a device idempotently', async () => {
     const first = await request(harness.app).post('/v1/devices').send(DEVICE).expect(201);
     assert.equal(first.body.created, true);
@@ -200,6 +209,48 @@ describe('Awanin API', () => {
       .expect(200);
     assert.equal(history.body.notifications.length, 1);
     assert.equal(history.body.notifications[0].status, 'sent');
+  });
+
+  it('names the chosen city in a test push, not "Lokasi saya"', async () => {
+    await request(harness.app).post('/v1/devices').send(DEVICE).expect(201);
+    await request(harness.app)
+      .patch(`/v1/devices/${DEVICE.deviceId}`)
+      .send({ preferences: { locationSlug: 'bandung', latitude: -6.9222, longitude: 107.6069 } })
+      .expect(200);
+
+    await request(harness.app)
+      .post(`/v1/devices/${DEVICE.deviceId}/test`)
+      .send({})
+      .expect(202);
+    assert.match(harness.push.messages[0].body, /Bandung/);
+    assert.doesNotMatch(harness.push.messages[0].body, /Lokasi saya/);
+  });
+
+  it('titles an alert with the city the device picked', async () => {
+    await request(harness.app).post('/v1/devices').send(DEVICE).expect(201);
+    await request(harness.app)
+      .patch(`/v1/devices/${DEVICE.deviceId}`)
+      .send({
+        preferences: {
+          locationSlug: 'bandung',
+          latitude: -6.9222,
+          longitude: 107.6069,
+          threshold: 100,
+          quietStart: null,
+          quietEnd: null,
+        },
+      })
+      .expect(200);
+
+    harness.upstream.aqi = 160;
+    await pollOnce({
+      db: harness.db,
+      upstream: harness.upstream,
+      push: harness.push,
+      config: harness.config,
+      logger: harness.logger,
+    });
+    assert.match(harness.push.messages[0].title, /^Bandung: /);
   });
 
   it('deletes a device', async () => {

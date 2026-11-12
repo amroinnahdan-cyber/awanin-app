@@ -10,6 +10,9 @@
  *
  * Open-Meteo accepts all of these coordinates in one request, so the
  * nationwide reading costs a single call (~100 weighted units).
+ *
+ * Mirrored on the server as `server/src/cities.ts`, which uses the same slugs
+ * and names to title alerts; change both together.
  */
 export type IndonesiaCity = {
   /** Stable id, also used as the route slug for the detail screen */

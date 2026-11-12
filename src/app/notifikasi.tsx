@@ -482,7 +482,13 @@ export default function NotifikasiScreen() {
         </View>
       </View>
 
-      <LocationSheet visible={pickerOpen} onClose={() => setPickerOpen(false)} />
+      {/* Alerts are about a place, so this picker also offers the nationwide
+          cities — not just the five showcase points in Jakarta. */}
+      <LocationSheet
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        includeCities
+      />
     </ScrollView>
   );
 }

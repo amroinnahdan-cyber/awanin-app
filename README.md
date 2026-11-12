@@ -464,7 +464,12 @@ Pengaturan di layar Notifikasi mengendalikan keduanya: **Peringatan Kualitas Uda
 
 Pemilih lokasi tetap tersedia di sheet lokasi (Beranda, Riwayat, Notifikasi): kolom
 pencarian nyata (filter nama/area, empty state, tombol hapus) plus tombol deteksi
-lokasi perangkat.
+lokasi perangkat. Sheet yang dibuka dari **Lokasi Notifikasi** juga bisa memasang
+alert untuk kota mana pun, bukan hanya lima titik Jakarta: saat kolom pencarian masih
+kosong ia menampilkan delapan kota populer plus petunjuk, dan 100 kota
+(`src/data/indonesiaCities.ts`) dirender hanya setelah pengguna mengetik. Server
+memakai slug kota yang sama (`server/src/cities.ts`, digenerate dengan
+`npm run sync-cities` di `server/`).
 
 ## Lisensi & atribusi
 

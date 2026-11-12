@@ -22,6 +22,7 @@ npm run dev               # tsx watch, http://localhost:4000
 
 npm run typecheck         # tsc --noEmit
 npm test                  # node:test + supertest (in-memory SQLite)
+npm run sync-cities       # regenerasi src/cities.ts dari daftar kota app
 npm run build && npm start
 ```
 
@@ -36,7 +37,7 @@ dalam *direct mode* ke Open-Meteo, tetapi push dan cache bersama tidak aktif.
 | `GET` | `/health` | Status layanan + cek database |
 | `GET` | `/v1/locations` | Lima lokasi tetap + AQI terakhir |
 | `GET` | `/v1/air?lat&lon` atau `?slug` | Pembacaan, 48 jam ke depan, prakiraan harian |
-| `GET` | `/v1/air/:slug` | Sama, untuk slug yang dikenal |
+| `GET` | `/v1/air/:slug` | Sama, untuk slug yang dikenal (lima titik Jakarta atau salah satu kota Indonesia) |
 | `GET` | `/v1/air/:slug/history?days=7\|30` | Agregat harian (rata-rata, maks, min) |
 | `GET` | `/v1/air/:slug/trend?hours=24` | Titik pembacaan yang dicatat scheduler |
 | `POST` | `/v1/devices` | Registrasi idempoten + preferensi default |
@@ -81,6 +82,13 @@ Format error selalu sama, sehingga klien bisa menampilkan pesan yang layak:
 - **Cache upstream**: snapshot 10 menit, riwayat 15 menit. Kalau Open-Meteo gagal,
   snapshot terakhir tetap dikirim dengan `stale: true`; hanya bila tidak ada
   snapshot sama sekali endpoint menjawab `503`.
+- **Penamaan lokasi**: server mengenal lima titik Jakarta (`src/locations.ts`) dan
+  seratus kota Indonesia (`src/cities.ts`, cermin dari `../src/data/indonesiaCities.ts`
+  yang digenerate ulang dengan `npm run sync-cities`).
+  Slug kota dipakai apa adanya; `lokasi-saya` dari GPS dinamai ulang dari koordinat —
+  titik Jakarta bila ≤15 km, lalu kota terdekat bila ≤60 km, dan baru `Lokasi saya`
+  kalau tidak ada yang cocok. Zona waktu ikut kota terdekat, jadi alert Makassar
+  tidak memakai jam Jakarta. Judul dan isi push memakai nama hasil resolusi itu.
 - **Scheduler**: setiap `POLL_INTERVAL_MINUTES` mengambil AQI semua titik yang
   dipantau, menyimpan satu baris per bucket 15 menit, lalu mengevaluasi alert.
   Alert hanya dikirim saat **kategori** berubah (bukan setiap poll), menghormati
